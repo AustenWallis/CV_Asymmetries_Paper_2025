@@ -24,6 +24,8 @@
 ################################################################################
 ################################################################################
 
+# TODO Sklearn seems to be fitting better. Should use, but not enough of a difference
+# atm to warrant changing the code. Will continue finding trends for now.
 # %%
 ################################################################################
 print('STEP 1: IMPORTING MODULES')
@@ -38,9 +40,10 @@ from scipy.optimize import curve_fit
 from sklearn.linear_model import LinearRegression
 from tqdm import tqdm
 from prettytable import PrettyTable
-import matplotlib.pyplot as plt
 from matplotlib.widgets import Button, Slider
 from matplotlib.animation import FuncAnimation
+from matplotlib.lines import Line2D
+import itertools
 
 plt.style.use('Solarize_Light2')
 script_ran_once = False
@@ -55,7 +58,7 @@ files = os.listdir(path_to_grid) # list of files in directory
 
 # -------INPUTS-------- #
 wavelength_range = (6435, 6685) # set desired wavelength range, start with the narrowest range
-inclination_column = 10 # 10-14 = 20,45,60,72.5,85
+inclination_column = 14 # 10-14 = 20,45,60,72.5,85
 grid_mixed = True # if grid is mixed, set to True to rerun the script at difference wavelength ranges
                   # you can change the wavelength range in the second input below.
 # --------------------- #
@@ -194,6 +197,9 @@ def gaussian_with_continuum(w, amp, mu, sigma, m, b, run):
     Returns:
         fit (np.array): The gaussian and continuum theoretical fit
     """
+    mu = H_alpha # fixing Halpha for the minute
+    #m = sk_slopes[int(run)] # fixing the slope for the minute
+    #b = sk_intercepts[int(run)] # fixing the intercept for the minute
     fcont = m * (w - H_alpha) + b
     const = amp * (1.0 / (np.fabs(sigma)*(2*np.pi)**0.5))
     fline = const * np.exp(-0.5*((w - mu)/np.fabs(sigma))**2.0)
@@ -226,14 +232,16 @@ def fit_data(wavelengths, grid):
     for run, spectrum in enumerate(grid):
         # estimate for initial slope
         initial_m = (spectrum[-1]-spectrum[0]) / (wavelengths[-1]-wavelengths[0])
+        #initial_m = sk_slopes[run] # fixing the slope for the minute
         
         # estimate for initial intercept
         initial_c = (spectrum[0]+spectrum[-1]) / 2
+        #initial_c = sk_intercepts[run] # fixing the intercept for the minute
         
         # estimate for the initial Gaussian peak (mean) location
         gaussian_only = spectrum - (initial_m * (wavelengths - H_alpha) + initial_c) # removing continuum
         initial_mu = wavelengths[np.argmax(gaussian_only)]
-        
+        initial_mu = H_alpha # fixing Halpha for the minute
         # estimate for initial sigma is 2.355 times the FWHM
         try:
             mask = (gaussian_only > np.max(gaussian_only)/ 3) # mask for fluxes greater than half peak
@@ -284,7 +292,7 @@ H_alpha = 6562.819 #4861.333	 # 6562.819 # Emission line we are fitting
 print('STEP 6: CALCULATING THE EQUIVALENT WIDTH EXCESSES')
 ################################################################################
 
-def equivalent_width(wavelengths, data, gaussian_fit, continuum_fit, shift='blue', peak_mask=(0,1000)):
+def equivalent_width_excess(wavelengths, data, gaussian_fit, continuum_fit, shift='blue', peak_mask=(0,1000)):
     """ Returning the equivalent width excesses for each spectrum in the grid.
     You can choose to return the blue or red wing excesses by setting the shift.
     
@@ -392,8 +400,8 @@ red_peak_mask = (0,90) # number of angstroms to cut around the peak, red plus.
 
 # Calculating the equivalent width excess data points for the PYTHON Grid
 fitted_grid, fit_con, fit_parameters, initials_all, pcov_all, infodict_all = fit_procedure(wavelengths, grid) #TODO  this causes the covariance issue
-blue_ew_excess = equivalent_width(wavelengths, grid, fitted_grid, fit_con, shift='blue', peak_mask=blue_peak_mask)
-red_ew_excess = equivalent_width(wavelengths, grid, fitted_grid, fit_con, shift='red', peak_mask=red_peak_mask)
+blue_ew_excess = equivalent_width_excess(wavelengths, grid, fitted_grid, fit_con, shift='blue', peak_mask=blue_peak_mask)
+red_ew_excess = equivalent_width_excess(wavelengths, grid, fitted_grid, fit_con, shift='red', peak_mask=red_peak_mask)
 
 # Calculating the equivalent width excess errors from resampling grid
 resampled_blue_ew_excess = np.array([])
@@ -402,8 +410,8 @@ samples = 150
 for sample in tqdm(range(samples)):
     resampled_grid = resample_data(wavelengths, grid, sk_noise_error) # resampled grid
     fitted_grid, fit_con, fit_parameters, initials_all, _, _ = fit_procedure(wavelengths, resampled_grid)
-    blue = equivalent_width(wavelengths, resampled_grid, fitted_grid, fit_con, shift='blue', peak_mask=blue_peak_mask)
-    red = equivalent_width(wavelengths, resampled_grid, fitted_grid, fit_con, shift='red', peak_mask=red_peak_mask)
+    blue = equivalent_width_excess(wavelengths, resampled_grid, fitted_grid, fit_con, shift='blue', peak_mask=blue_peak_mask)
+    red = equivalent_width_excess(wavelengths, resampled_grid, fitted_grid, fit_con, shift='red', peak_mask=red_peak_mask)
     resampled_blue_ew_excess = np.append(resampled_blue_ew_excess, blue)
     resampled_red_ew_excess = np.append(resampled_red_ew_excess, red)
 resampled_blue_ew_excess = resampled_blue_ew_excess.reshape(samples, len(grid))
@@ -697,7 +705,7 @@ for run in range(len(removed_runs)):
     flux_without_continuum = flux - rebased_con_fluxes # flux without continuum
     cut_flux = flux_without_continuum[100:-100] # cutting the edges of the flux as unphysical
     cut_wavelength = wavelength[100:-100] # cutting the edges of the wavelength as unphysical
-    if np.max(cut_flux) < 2e-15: # flux limit to determine if flat
+    if np.max(cut_flux) < 4e-15: # flux limit to determine if flat
         cut_runs.append(run)
 
 # finding the high error runs
@@ -811,7 +819,9 @@ plt.show()
 for i in range(len(removed_runs)):
     if final_results['red_ew_excess_error'][i] > 0.5 or final_results['blue_ew_excess_error'][i] > 0.5:
         cut_runs_2.append(i)
-        
+    elif frms_data[i] > 5e-1 or rms_data[i] > 5e-1:
+        cut_runs_2.append(i)
+
 cut_runs = np.append(cut_runs, cut_runs_2) # adding high error runs to flat runs
 cut_runs = np.unique(cut_runs) # removing duplicates
 
@@ -830,8 +840,14 @@ cut_red_ew_excess = np.delete(final_results['red_ew_excess'], cut_runs)
 cut_blue_ew_excess = np.delete(final_results['blue_ew_excess'], cut_runs)
 cut_red_ew_excess_error = np.delete(final_results['red_ew_excess_error'], cut_runs)
 cut_blue_ew_excess_error = np.delete(final_results['blue_ew_excess_error'], cut_runs)
+#cut_sk_con_data = np.delete(final_results['sk_con_data'], cut_runs)
 cut_grid = [i for j, i in enumerate(final_results['grid']) if j not in cut_runs]
 cut_grid_length = np.delete(grid_length, cut_runs)
+cut_frms_data = np.delete(frms_data, cut_runs)
+cut_rms_data = np.delete(rms_data, cut_runs)
+cut_chi_2_data = np.delete(chi_2_data, cut_runs)
+cut_rss_data = np.delete(rss_data, cut_runs)
+
 
 # Loading Teo's data from csv files
 bz_cam = np.loadtxt('Teo_data/BZ Cam.csv', delimiter=',') 
@@ -860,6 +876,11 @@ def slider_update(val):
                label='Fitted Continuum', 
                color='blue'
                )
+    ax[1].plot(final_results['wavelength_grid'][int(val)],
+               final_results['sk_con_data'][int(val)],
+                label='Sklearn Fitted Continuum',
+                color='green'
+                )
     # plotting the mask lines where the equalivalent width is calculated
     ax[1].axvline(x=H_alpha-blue_peak_mask[0], color='blue', linestyle='--', alpha=0.5)
     ax[1].axvline(x=H_alpha-blue_peak_mask[1], color='blue', linestyle='--', alpha=0.5)
@@ -868,6 +889,15 @@ def slider_update(val):
     ax[1].set_xlabel('Wavelength ($Å$)') # plot formatting
     ax[1].set_ylabel('Flux')
     ax[1].legend()
+    # Add a text box for fit stats\
+    textstr = '\n'.join((
+        f'FRMS = {frms_data[int(val)]:.2e}',
+        f'RMS = {rms_data[int(val)]:.2e}',
+        f'$chi^2$ = {chi_2_data[int(val)]:.2e}',
+        f'RSS = {rss_data[int(val)]:.2e}'))
+    props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+    ax[1].text(0.9, 0.9, textstr, transform=ax[1].transAxes, fontsize=14,
+        verticalalignment='top', bbox=props)
     
     # ax2 is plotting an individual EW excess point for a particular run
     # This changes with the animation
@@ -1037,11 +1067,22 @@ anim.running = True # setting off animation
 print('STEP 12: FINDING TRENDS IN THE DATA')
 ################################################################################
 
+# Make a plots folder with todaydate and inc in the name
+import datetime
+import os
+today = datetime.date.today()
+today = today.strftime("%d-%m-%Y")
+inc = incs[inclination_column]
+folder_name = f'Plots/{today}_inc_{inc}'
+if not os.path.exists(folder_name):
+    os.makedirs(folder_name)
+    
+
 #TODO work on finding trends in the data
 
 # importing the run parameter combinations
 # Loading run files parameter combinations from pretty table file
-path_to_table = 'Grids/Wider_Ha_grid_spec_files/Grid_runs_full_table.txt'
+path_to_table = '../Grids/Wider_Ha_grid_spec_files/Grid_runs_full_table.txt'
 ascii_table = np.genfromtxt(f'{path_to_table}',
                     delimiter='|',
                     skip_header=3,
@@ -1052,6 +1093,17 @@ ascii_table = np.genfromtxt(f'{path_to_table}',
 # removing nan column due to pretty table
 ascii_table = np.delete(ascii_table, 0, 1) # array, index position, axis
 parameter_table = np.delete(ascii_table, -1, 1)
+
+path2_to_table = '../Grids/Wider_Ha_grid_spec_files/Grid_runs_combinations.txt'
+combination_table = np.genfromtxt(f'{path2_to_table}',
+                    delimiter='|',
+                    skip_header=3,
+                    skip_footer=1,
+                    dtype=float
+                    )
+combination_table = np.delete(combination_table, 0, 1) # array, index position, axis
+combination_table = np.delete(combination_table, 0, 1) # array, index position, axis
+combination_table = np.delete(combination_table, -1, 1) # array, index position, axis
 
 sim_parameters = ['$\dot{M}_{disk}$',
         '$\dot{M}_{wind}$',
@@ -1185,18 +1237,614 @@ blue_3d()
 red_2d()
 
 # %%
+%matplotlib inline
+# performing PCA on the Excess EW data with different parameter combinations to see if there are any trends in the data
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+import scipy.stats as stats
 
-# create a even grid space between the interval of 1 and 5
+# Add cut_blue and cut_red ew excesses to the parameter table
+data = np.column_stack((np.delete(cut_parameter_table, 0, 1), cut_blue_ew_excess, cut_red_ew_excess))
+feature_names = sim_parameters + ['Blue EW Excess', 'Red EW Excess']
 
-for i in range(1,6):
-    for j in range(1,6):
-        plt.scatter(i, j, color='blue', s=50)
-        
-plt.xlabel('X')
-plt.ylabel('Y')
-plt.title('Even Grid Space')
+# standardising the data
+scaler = StandardScaler()
+X = scaler.fit_transform(data)
+
+ax = plt.axes()
+
+# convert X to a pandas dataframe
+import pandas as pd
+X = pd.DataFrame(X, columns=feature_names)
+corr = X.corr(method='spearman')
+#im = ax.imshow(np.corrcoef(X.T), cmap="bwr", vmin=-1, vmax=1)
+im = ax.imshow(corr, cmap="bwr", vmin=-1, vmax=1)
+
+
+ax.set_xticks([0, 1, 2, 3, 4, 5, 6, 7])
+ax.set_xticklabels(list(feature_names), rotation=90)
+ax.set_yticks([0, 1, 2, 3, 4, 5, 6, 7])
+ax.set_yticklabels(list(feature_names))
+# hide the grid lines
+ax.grid(False)
+plt.colorbar(im).ax.set_ylabel("$r$", rotation=0)
+ax.set_title(f"A correlation matrix at {incs[inclination_column]} inc")
+plt.tight_layout()
+plt.savefig(f'{folder_name}/correlation_matrix.png', dpi=300)
 plt.show()
 
+#performing PCA
+pca = PCA()
+pca.fit(X)
+
+#creating a CDF like plot summing the variance explained to 1 with increasing number of components
+plt.plot(np.cumsum(pca.explained_variance_ratio_), marker='o')
+plt.xlabel('Number of Principal Components')
+plt.ylabel('Explained Variance Ratio')
+plt.title('Explained Variance Ratio of PCA')
+
+plt.savefig(f'{folder_name}/PCA_explained_variance_ratio_inc_{incs[inclination_column]}.png', dpi=300)
+plt.show()
+
+# %%
+%matplotlib inline
+saving_plot_names = ['Mdot_disk', 'Mdot_wind', 'KWD.d', 'r_exp', 'acc_length', 'acc_exp']
+
+windlist = [[9e-11, 3e-10, 9e-10], [3e-10, 1e-9, 3e-9], [9e-10, 3e-9, 9e-9]]
+windvalues = [0.03, 0.1, 0.3]
+for j in range(0,6):
+    for i in range(0,3):
+        plt.errorbar(cut_red_ew_excess,
+                        cut_blue_ew_excess,
+                    xerr=cut_red_ew_excess_error,
+                    yerr=cut_blue_ew_excess_error,
+                    fmt='yo', 
+                    ecolor = 'grey', 
+                    alpha=0.2,
+                    zorder = 0
+                    ) # error bars for scatterplot below
+        #plotting red scatters of individual parameters
+        chosen_parameter_row = i # changes value
+        chosen_parameter_column = j # changes parameter 1 is dodgy atm 
+        value = combination_table[chosen_parameter_row][chosen_parameter_column]
+        for index, run in enumerate(cut_parameter_table):
+            if chosen_parameter_column != 1:
+                if f'{run[chosen_parameter_column+1]:.3e}' == f'{value:.3e}':
+                    plt.scatter(cut_red_ew_excess[index], 
+                                cut_blue_ew_excess[index], 
+                                c='green', 
+                                s=15, 
+                                zorder = 1
+                                )
+                    #print(f'plotting run {run}')
+            elif chosen_parameter_column == 1: # TODO not plotting all available points yet
+                #print(f'value = {value}')
+                # index where value is in windvalues
+                wind_multiple = cut_parameter_table[index][1+1] / cut_parameter_table[index][0+1]
+                if f'{wind_multiple:.3e}' == f'{float(value):.3e}':
+                    plt.scatter(cut_red_ew_excess[index], 
+                                cut_blue_ew_excess[index], 
+                                c='green', 
+                                s=15, 
+                                zorder = 1
+                                )
+                
+                # l = windvalues.index(value)
+                # for k, wind in enumerate(windlist[l]):
+                #    #print(f'wind = {wind}, run = {run[chosen_parameter_column+1]}')
+                #     if f'{run[chosen_parameter_column+1]:.3e}' == f'{wind:.3e}':
+                #         plt.scatter(cut_red_ew_excess[index], 
+                #                     cut_blue_ew_excess[index], 
+                #                     c='green', 
+                #                     s=15, 
+                #                     zorder = 1
+                #                     )
+                #         #print(f'plotting run {run}')
+                #     break
+
+
+        # vertical and horizontal lines at 0 i.e axes
+        plt.axvline(x=0, color='black', linestyle='--', alpha=0.5, zorder = 1)
+        plt.axhline(y=0, color='black', linestyle='--', alpha=0.5, zorder = 1)
+
+        # plot formatting
+        plt.xlabel('Red Wing EW Excess ($Å$)')
+        plt.ylabel('Blue Wing EW Excess ($Å$)')
+        plt.title('Red vs Blue Wing Excess')
+        plt.xlim(min(cut_red_ew_excess)-2,max(cut_red_ew_excess)+2)
+        plt.ylim(min(cut_blue_ew_excess)-2,max(cut_blue_ew_excess)+2)
+        plt.title(f'highlighting {feature_names[chosen_parameter_column]} = {value}, inc = {incs[inclination_column]}°')
+        plt.savefig(f'{folder_name}/highlighting_{saving_plot_names[chosen_parameter_column]}_{value}_inc_{incs[inclination_column]}.png', dpi=300)
+        plt.show()
+
+
+# %%
+
+%matplotlib qt
+
+unique_points = combination_table.T
+unique_combinations = np.delete(cut_parameter_table, 0, 1)
+point_sizes = cut_blue_ew_excess # YOU CAN CHANGE THIS TO RED
+print(np.shape(unique_points), np.shape(unique_combinations), np.shape(point_sizes))
+
+# changing windmdot to be a multiple 
+for i in range(len(unique_combinations)):
+    unique_combinations[i][1] = unique_combinations[i][1]/unique_combinations[i][0]
+    
+desired_parameters = [1,2,4] # 0-5 pick 3
+fixed_parameters = [i for i in range(6) if i not in desired_parameters]
+
+fixed_combinations = []
+fixed_combination = [list(i) for i in unique_points[fixed_parameters]]
+for i in itertools.product(*fixed_combination):
+    fixed_combinations.append(list(i))
+for i in range(len(fixed_combinations)):
+    fixed_combinations[i] = [f'{fixed_combinations[i][j]:.3e}' for j in range(len(fixed_combinations[i]))]
+
+# Animation for the EW excess plots showing the data for particular runs
+def function_for_data(val,fixed_combinations, unique_combinations, fixed_parameters):
+    # fitting the data where we plot 3 parameters with excess quilealent widths as the size of the points
+    # and then the 27 frams interate over the other 3 parameters
+    fixed = fixed_combinations[val]
+    x = []
+    y = []
+    z = []
+    w = []
+    c = []
+    w2 = []
+    for run in range(len(unique_combinations)):
+        if float(unique_combinations[run][fixed_parameters[0]]) == float(fixed[0]) and float(unique_combinations[run][fixed_parameters[1]]) == float(fixed[1]) and float(unique_combinations[run][fixed_parameters[2]]) == float(fixed[2]):
+            x.append(unique_combinations[run][desired_parameters[0]])
+            y.append(unique_combinations[run][desired_parameters[1]])
+            z.append(unique_combinations[run][desired_parameters[2]])
+            w.append(point_sizes[run])
+    
+    for t in w:
+        if t < 0:
+            w2.append(abs(t)*500)
+            c.append('red')
+        else:
+            w2.append(t*500)
+            c.append('blue')
+            
+    return x, y, z, w, c, w2
+        
+    
+def slider_update(val):
+    """When the slide updates, this function is called which replots the graph."""
+    ax.clear() # clear the axis to update the plot
+    x,y,z,_,c,w2 = function_for_data(val,fixed_combinations, unique_combinations, fixed_parameters)
+    ax.scatter(x, y, z, marker='o', color=c, s=w2)
+    axis_info(val,w2)
+    fig.canvas.draw_idle()
+
+def animation_setting_new_slider_value(_):
+    """Animation works by the frame updating the slider value which then 
+    calls the slider_update function, which replots the graphs."""
+    if anim.running:
+        if grid_slider.val == 26: # if at the end of the grid
+            grid_slider.set_val(0) # go back to the start
+        else:
+            grid_slider.set_val(grid_slider.val + 1) # else go to the next run
+            
+def play_pause(_):
+    """A play/pause button to control the animation."""
+    if anim.running:
+        anim.running = False
+        slider_update(grid_slider.val)
+    else:
+        anim.running = True
+
+def left_button_func(_):
+    """A left button to go back one run."""
+    anim.running = False
+    if grid_slider.val == 0:
+        grid_slider.set_val(26)
+    else:
+        grid_slider.set_val(grid_slider.val - 1)
+    slider_update(grid_slider.val)
+
+def right_button_func(_):
+    """A right button to go forward one run."""
+    anim.running = False
+    if grid_slider.val == 26:
+        grid_slider.set_val(0)
+    else:
+        grid_slider.set_val(grid_slider.val + 1)
+    slider_update(grid_slider.val)
+    
+fig = plt.figure(figsize=(13, 8))
+ax = fig.add_subplot(projection='3d')
+
+def axis_info(val,w2):
+    """Setting up the axis for the plot."""
+    ax.set_title('Blue Wing EW Excess vs Simulation Parameters')
+    ax.set_xlabel(f'{feature_names[desired_parameters[0]]}')
+    ax.set_ylabel(f'{feature_names[desired_parameters[1]]}')
+    ax.set_zlabel(f'{feature_names[desired_parameters[2]]}')
+    ax.set_xlim3d(unique_points[desired_parameters[0]][0], unique_points[desired_parameters[0]][-1])
+    ax.set_ylim3d(unique_points[desired_parameters[1]][0], unique_points[desired_parameters[1]][-1])
+    ax.set_zlim3d(unique_points[desired_parameters[2]][0], unique_points[desired_parameters[2]][-1])
+    point = [Line2D([0], [0], label='manual point', marker='o', markersize=5, 
+    linestyle='', color = colour) for colour in ['red', 'blue']]
+    ax.legend(point, ['Negative', 'Positive'])
+    textstr = '\n'.join((
+        f'Fixed Parameters:',
+        f'{feature_names[fixed_parameters[0]]} = {fixed_combinations[val][0]}',
+        f'{feature_names[fixed_parameters[1]]} = {fixed_combinations[val][1]}',
+        f'{feature_names[fixed_parameters[2]]} = {fixed_combinations[val][2]}',
+        f'Number of data points: {len(w2)}'))
+
+    props = dict(boxstyle='round', facecolor='wheat', alpha=1)
+    ax.text2D(1.05, 0.9, textstr, transform=ax.transAxes, fontsize=14,
+        verticalalignment='top', bbox=props)
+    
+def init_plot():
+    """Initialising the animation plot with the first run."""
+    x,y,z,_,c,w2 = function_for_data(0,fixed_combinations, unique_combinations, fixed_parameters)
+    ax.scatter(x, y, z, marker='o', color=c, s=w2)
+    axis_info(0,w2)
+    return # plot info here
+
+
+# Adding Run Slider axis
+ax_slider = fig.add_axes([0.1, 0.05, 0.8, 0.03])
+grid_slider = Slider(ax_slider, 'Combination', 0, 26, valinit=0, valstep=1)
+grid_slider.on_changed(slider_update)
+
+# Adding Play/Pause Button axis
+ax_play_pause = fig.add_axes([0.15, 0.1, 0.05, 0.05])
+play_pause_button = Button(ax_play_pause, '>||')
+play_pause_button.on_clicked(play_pause)
+
+# Adding Left Button axis
+ax_left_button = fig.add_axes([0.1, 0.1, 0.05, 0.05])
+left_button = Button(ax_left_button, '<')
+left_button.on_clicked(left_button_func)
+
+# Adding Right Button axis
+ax_right_button = fig.add_axes([0.2, 0.1, 0.05, 0.05])
+right_button = Button(ax_right_button, '>')
+right_button.on_clicked(right_button_func)
+
+# Setting up the animation
+init_plot() # initialising the plot
+anim = FuncAnimation(fig, 
+                     animation_setting_new_slider_value,
+                     frames=27,
+                     interval=700
+                     ) # setting up animation
+anim.running = True # setting off animation
+
+# %%
+# Simple linear regression of EW excesses vs simulation parameters
+from sklearn.linear_model import LinearRegression
+
+# TODO Use EW values instead of EW excess
+#y = ax_1 + bx_2 + cx_3 + dx_4 + ex_5 + fx_6 + g
+#x = [mdot_disk, mdot_wind, kwd.d, r_exp, acc_length, acc_exp]
+#y = [blue_ew_excess, red_ew_excess]
+
+# setting up the data cutting the first column 
+X = cut_parameter_table[:,1:]
+Y = np.column_stack((cut_blue_ew_excess, cut_red_ew_excess))
+log_X = np.log(X)
+
+# setting up the linear regression model
+model = LinearRegression()
+model.fit(X, Y)
+
+# printing the coefficients
+print(f'Coefficients: {model.coef_}')
+print(f'Intercept: {model.intercept_}')
+print(model.score(X, Y)) # R^2 value
+
+# print out my model equation from the coefficient and intercept 
+# y = ax_1 + bx_2 + cx_3 + dx_4 + ex_5 + fx_6 + g
+print(f'y = {model.coef_[0][0]:.3f}mdot_disk + {model.coef_[0][1]:.3f}mdot_wind + {model.coef_[0][2]:.3f}kwd.d + {model.coef_[0][3]:.3f}r_exp + {model.coef_[0][4]:.3f}acc_length + {model.coef_[0][5]:.3f}acc_exp + {model.intercept_[0]:.3f}')
+print(f'y = {model.coef_[1][0]:.3f}mdot_disk + {model.coef_[1][1]:.3f}mdot_wind + {model.coef_[1][2]:.3f}kwd.d + {model.coef_[1][3]:.3f}r_exp + {model.coef_[1][4]:.3f}acc_length + {model.coef_[1][5]:.3f}acc_exp + {model.intercept_[1]:.3f}')
+
+# %%
+def equivalent_width(wavelengths, fluxes, continuum, colour) -> list:
+    """Calculates the equivalent width of an emission line given the wavelengths,
+    fluxes and continuum for a single spectrum
+    Args:
+        wavelengths (list): uneven array of wavelengths
+        fluxes (list): uneven array of fluxes
+        continuum (list): uneven array of continuum values
+        colour (str): blue or red side of H_alpha line
+    Returns:
+        equivalent_width (float): equivalent width of the line"""
+    
+    H_alpha = 6562.819
+    
+    # lists must be arrays for np.where
+    wavelengths = np.array(wavelengths)
+    fluxes = np.array(fluxes)
+    continuum = np.array(continuum)
+    
+    if colour == 'blue':
+        peak_mask = (wavelengths < H_alpha)
+    elif colour == 'red':
+        peak_mask = (wavelengths > H_alpha)
+    else:
+        print('Please enter a valid colour: blue or red')
+    
+    #only use true values of wavelengths with the peak mask
+    wavelengths = np.array(wavelengths[peak_mask])
+    fluxes = np.array(fluxes[peak_mask])
+    continuum = np.array(continuum[peak_mask])
+        
+    equivalent_width = np.trapz((fluxes/continuum)-1, wavelengths)
+    return equivalent_width
+
+test_run = 470
+test_data_blue = equivalent_width(final_results['wavelength_grid'][test_run],
+                             final_results['grid'][test_run],
+                             final_results['sk_con_data'][test_run], 
+                             'blue')
+test_fit_blue = equivalent_width(final_results['wavelength_grid'][test_run], 
+                            final_results['fitted_grid'][test_run], 
+                            final_results['fit_con'][test_run],
+                            'blue')
+print(test_data_blue, test_fit_blue)
+test_data_red = equivalent_width(final_results['wavelength_grid'][test_run],
+                                final_results['grid'][test_run],
+                                final_results['sk_con_data'][test_run], 
+                                'red')
+test_fit_red = equivalent_width(final_results['wavelength_grid'][test_run],
+                                final_results['fitted_grid'][test_run],
+                                final_results['fit_con'][test_run],
+                                'red')
+print(test_data_red, test_fit_red)
+    
+%matplotlib inline
+plt.plot(final_results['wavelength_grid'][test_run], final_results['grid'][test_run], label='Original Data', color='black')
+plt.plot(final_results['wavelength_grid'][test_run], final_results['sk_con_data'][test_run], label='Sklearn Continuum', color='green')
+plt.axvline(x=H_alpha, color='black', linestyle='--', alpha=0.5)
+plt.axvline(x=(H_alpha-test_data_blue), color='blue', linestyle='--', alpha=0.5)
+plt.axvline(x=(H_alpha+test_data_red), color='red', linestyle='--', alpha=0.5)
+plt.show()
+
+plt.plot(final_results['wavelength_grid'][test_run], final_results['fitted_grid'][test_run], label='Optimal Gaussian with Continuum', color='red')
+plt.plot(final_results['wavelength_grid'][test_run], final_results['fit_con'][test_run], label='Fitted Continuum', color='blue')
+plt.axvline(x=H_alpha, color='black', linestyle='--', alpha=0.5)
+plt.axvline(x=(H_alpha-test_fit_blue), color='blue', linestyle='--', alpha=0.5)
+plt.axvline(x=(H_alpha+test_fit_red), color='red', linestyle='--', alpha=0.5)
+plt.show()
+
+# collecting EWs throughout the grid
+ew_data_blue = [equivalent_width(final_results['wavelength_grid'][run],
+                                final_results['grid'][run],
+                                final_results['sk_con_data'][run], 
+                                'blue') for run in range(len(final_results['grid']))]
+ew_data_red = [equivalent_width(final_results['wavelength_grid'][run],
+                                final_results['grid'][run],
+                                final_results['sk_con_data'][run], 
+                                'red') for run in range(len(final_results['grid']))]
+ew_fit_blue = [equivalent_width(final_results['wavelength_grid'][run],
+                                final_results['fitted_grid'][run],
+                                final_results['fit_con'][run], 
+                                'blue') for run in range(len(final_results['grid']))]
+ew_fit_red = [equivalent_width(final_results['wavelength_grid'][run],
+                                final_results['fitted_grid'][run],
+                                final_results['fit_con'][run], 
+                                'red') for run in range(len(final_results['grid']))]
+
+cut_ew_data_blue = np.delete(ew_data_blue, cut_runs)
+cut_ew_fit_blue = np.delete(ew_fit_blue, cut_runs)
+cut_ew_data_red = np.delete(ew_data_red, cut_runs)
+cut_ew_fit_red = np.delete(ew_fit_red, cut_runs)
+
+# plotting the blue EWs of the data and the fit
+x = np.linspace(min(np.log(ew_fit_blue)), max(np.log(ew_fit_blue)), 200)
+fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+target = axs[0].scatter(np.log(ew_fit_blue), np.log(ew_data_blue), label='Blue EWs', c=grid_length, cmap='rainbow')
+axs[0].plot(x, x, color='black', linestyle='--', alpha=0.5)
+axs[0].set_title('All Spectral Runs Blue EWs')
+axs[0].set_xlabel('Log(Fit EW)')
+axs[0].set_ylabel('Log(Obs EW)')
+target2 = axs[1].scatter(np.log(cut_ew_fit_blue), np.log(cut_ew_data_blue), label='Blue EWs', c=cut_grid_length, cmap='rainbow')
+axs[1].plot(x, x, color='black', linestyle='--', alpha=0.5)
+axs[1].set_title('Only Spectral Run After Cut Blue EWs')
+axs[1].set_xlabel('Log(Fit EW)')
+axs[1].set_ylabel('Log(Obs EW)')
+plt.colorbar(target, ax=axs[0], label='Grid Length')
+plt.colorbar(target2, ax=axs[1], label='Grid Length')
+plt.tight_layout()
+plt.savefig(f'{folder_name}/blue_EWs_model_vs_data_inc_{incs[inclination_column]}.png', dpi=300)
+plt.show()
+
+# Now for red EWs
+x = np.linspace(min(np.log(ew_fit_red)), max(np.log(ew_fit_red)), 200)
+fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+target3 = axs[0].scatter(np.log(ew_fit_red), np.log(ew_data_red), label='Red EWs', c=grid_length, cmap='rainbow')
+axs[0].plot(x, x, color='black', linestyle='--', alpha=0.3)
+axs[0].set_title('All Spectral Runs Red EWs')
+axs[0].set_xlabel('Log(Fit EW)')
+axs[0].set_ylabel('Log(Obs EW)')
+target4 = axs[1].scatter(np.log(cut_ew_fit_red), np.log(cut_ew_data_red), label='Red EWs', c=cut_grid_length, cmap='rainbow')
+axs[1].plot(x, x, color='black', linestyle='--', alpha=0.3)
+axs[1].set_title('Only Spectral Run After Cut Red EWs')
+axs[1].set_xlabel('Log(Fit EW)')
+axs[1].set_ylabel('Log(Obs EW)')
+plt.colorbar(target3, ax=axs[0], label='Grid Length')
+plt.colorbar(target4, ax=axs[1], label='Grid Length')
+plt.tight_layout()
+plt.savefig(f'{folder_name}/red_EWs_model_vs_data_inc_{incs[inclination_column]}.png', dpi=300)
+plt.show()
+
+# %%
+%matplotlib inline
+x = np.linspace(min(cut_ew_data_blue), max(cut_ew_data_blue), 200)
+# Plot a diagnostic plot of the blue vs red EW
+target = plt.scatter(cut_ew_data_red, cut_ew_data_blue, label='EWs', c=cut_grid_length, cmap='rainbow')
+plt.colorbar(target, label='Grid Length')
+plt.plot(x,x, color='black', linestyle='--', alpha=0.3, label='y=x')
+plt.xlabel('Red EW')
+plt.ylabel('Blue EW')
+plt.title(f'Red vs Blue EWs for inclination {incs[inclination_column]}°')
+plt.savefig(f'{folder_name}/red_vs_blue_EWs_inc_{incs[inclination_column]}.png', dpi=300)
+plt.show()
+
+target2 = plt.scatter(np.log10(cut_ew_data_red), np.log10(cut_ew_data_blue), label='EWs', c=cut_grid_length, cmap='rainbow')
+plt.colorbar(target2, label='Grid Length')
+plt.plot(np.log10(x),np.log10(x), color='black', linestyle='--', alpha=0.3, label='y=x')
+plt.xlabel('Log(Red EW)')
+plt.ylabel('Log(Blue EW)')
+plt.title(f'Log10 Red vs Blue EWs for inclination {incs[inclination_column]}°')
+plt.savefig(f'{folder_name}/log_red_vs_blue_EWs_inc_{incs[inclination_column]}.png', dpi=300)
+plt.show()
+
+# %%
+# Simple linear regression of EW excesses vs simulation parameters
+from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import Ridge
+from sklearn.model_selection import train_test_split
+
+# TODO Use EW values instead of EW excess
+#y = ax_1 + bx_2 + cx_3 + dx_4 + ex_5 + fx_6 + g
+#x = [mdot_disk, mdot_wind, kwd.d, r_exp, acc_length, acc_exp]
+#y = [blue_ew, red_ew]
+
+# setting up the data cutting the first column 
+X = parameter_table[:,1:] # cut_parameter_table
+#Y = np.column_stack((np.log(ew_data_blue), np.log(ew_data_red), np.log(ew_fit_blue), np.log(ew_fit_red)))
+# if any Y element are <0 then set to 1e-50
+
+
+log_Y = np.column_stack((np.log10(ew_data_blue), np.log10(ew_data_red)))#, np.log10(cut_ew_fit_blue), np.log10(cut_ew_fit_red)))
+#find the NaN values in log_Y and store the index of the location
+nan_values = np.argwhere(np.isnan(log_Y))
+log_Y = np.delete(log_Y, nan_values, axis=0)
+#log_Y = np.log10(cut_ew_data_blue)
+#log_Y = np.where(log_Y == float('nan'), 1e-50, log_Y)
+#replace 0's in X with a 1e-50 to avoid log(0) error
+X = np.where(X == 0, 1e-50, X)
+log_X = np.log10(X)
+log_X = np.delete(log_X, nan_values, axis=0)
+
+# setting up the linear regression model
+model = LinearRegression()
+#model = Ridge(alpha=0.1)
+model.fit(log_X, log_Y)
+
+# printing the coefficients
+print(f'Coefficients: \n {model.coef_}')
+print(f'Intercept: \n {model.intercept_}')
+print(f'R^2 Score: \n {model.score(log_X, log_Y)}') # R^2 value
+
+# print out my model equation from the coefficient and intercept 
+print('\nEquation for log(EW) = alog(p1) + blog(p2) + clog(p3) + dlog(p4) + elog(p5) + flog(p6) + g \n')
+# y = ax_1 + bx_2 + cx_3 + dx_4 + ex_5 + fx_6 + g
+#print(f'y = {model.coef_[0]:.3f}mdot_disk + {model.coef_[1]:.3f}mdot_wind + {model.coef_[2]:.3f}kwd.d + {model.coef_[3]:.3f}r_exp + {model.coef_[4]:.3f}acc_length + {model.coef_[5]:.3f}acc_exp + {model.intercept_:.3f}')
+#print(f'y = {model.coef_[0][0]:.3e}mdot_disk + {model.coef_[0][1]:.3e}mdot_wind + {model.coef_[0][2]:.3e}kwd.d + {model.coef_[0][3]:.3e}r_exp + {model.coef_[0][4]:.3e}acc_length + {model.coef_[0][5]:.3e}acc_exp + {model.intercept_[0]:.3e} |Blue EW Data|')
+#print(f'y = {model.coef_[1][0]:.3e}mdot_disk + {model.coef_[1][1]:.3e}mdot_wind + {model.coef_[1][2]:.3e}kwd.d + {model.coef_[1][3]:.3e}r_exp + {model.coef_[1][4]:.3e}acc_length + {model.coef_[1][5]:.3e}acc_exp + {model.intercept_[1]:.3e} |Red EW Data|')
+#print(f'y = {model.coef_[2][0]:.3e}mdot_disk + {model.coef_[2][1]:.3e}mdot_wind + {model.coef_[2][2]:.3e}kwd.d + {model.coef_[2][3]:.3e}r_exp + {model.coef_[2][4]:.3e}acc_length + {model.coef_[2][5]:.3e}acc_exp + {model.intercept_[2]:.3e} |Blue EW Fit|')
+#print(f'y = {model.coef_[3][0]:.3e}mdot_disk + {model.coef_[3][1]:.3e}mdot_wind + {model.coef_[3][2]:.3e}kwd.d + {model.coef_[3][3]:.3e}r_exp + {model.coef_[3][4]:.3e}acc_length + {model.coef_[3][5]:.3e}acc_exp + {model.intercept_[3]:.3e} |Red EW Fit|')
+
+log_combination_table = np.where(combination_table == 0, 1e-50, combination_table)
+log_combination_table = np.log10(log_combination_table)
+# print parameter names
+print(sim_parameters)
+for i in range(len(log_combination_table)):
+    #print([f'{log_combination_table[i][j]:.3e}' for j in range(len(log_combination_table[i]))]) # exp format
+    print([f'{log_combination_table[i][j]:.3f}' for j in range(len(log_combination_table[i]))]) # normal format
+# print('\nEquation for log(EW) = a + b + c + d + e + f + g \n')
+# # y = ax_1 + bx_2 + cx_3 + dx_4 + ex_5 + fx_6 + g
+# print(f'y = {np.exp(model.coef_[0][0]):.3e}mdot_disk + {np.exp(model.coef_[0][1]):.3e}mdot_wind + {np.exp(model.coef_[0][2]):.3e}kwd.d + {np.exp(model.coef_[0][3]):.3e}r_exp + {np.exp(model.coef_[0][4]):.3e}acc_length + {np.exp(model.coef_[0][5]):.3e}acc_exp + {np.exp(model.intercept_[0]):.3e} |Blue EW Data|')
+# print(f'y = {np.exp(model.coef_[1][0]):.3e}mdot_disk + {np.exp(model.coef_[1][1]):.3e}mdot_wind + {np.exp(model.coef_[1][2]):.3e}kwd.d + {np.exp(model.coef_[1][3]):.3e}r_exp + {np.exp(model.coef_[1][4]):.3e}acc_length + {np.exp(model.coef_[1][5]):.3e}acc_exp + {np.exp(model.intercept_[1]):.3e} |Red EW Data|')
+# print(f'y = {np.exp(model.coef_[2][0]):.3e}mdot_disk + {np.exp(model.coef_[2][1]):.3e}mdot_wind + {np.exp(model.coef_[2][2]):.3e}kwd.d + {np.exp(model.coef_[2][3]):.3e}r_exp + {np.exp(model.coef_[2][4]):.3e}acc_length + {np.exp(model.coef_[2][5]):.3e}acc_exp + {np.exp(model.intercept_[2]):.3e} |Blue EW Fit|')
+# print(f'y = {np.exp(model.coef_[3][0]):.3e}mdot_disk + {np.exp(model.coef_[3][1]):.3e}mdot_wind + {np.exp(model.coef_[3][2]):.3e}kwd.d + {np.exp(model.coef_[3][3]):.3e}r_exp + {np.exp(model.coef_[3][4]):.3e}acc_length + {np.exp(model.coef_[3][5]):.3e}acc_exp + {np.exp(model.intercept_[3]):.3e} |Red EW Fit|')
+
+predicted_log_Y = model.predict(log_X)
+#x=y line
+fig,ax = plt.subplots(1,2, figsize=(10,5))
+ax[0].scatter(log_Y[:,0], predicted_log_Y[:,0], color='blue')
+ax[0].plot(log_Y, log_Y, label='y=y_pred')
+ax[0].set_xlabel('Log10 EW Blue Obs')
+ax[0].set_ylabel('Predicted Log10 EW Blue Obs')
+ax[0].set_title('Linear regression model for blue EW python data')
+ax[0].legend()
+# colour maps to run numbers
+temp = np.delete(grid_length, nan_values)
+target = ax[1].scatter(log_Y[:,0], predicted_log_Y[:,0], c=temp, cmap='rainbow')
+plt.colorbar(target, ax=ax[1], label='Grid Length')
+ax[1].plot(log_Y, log_Y, label='y=y_pred')
+ax[1].set_xlabel('Log10 EW Blue Obs')
+ax[1].set_ylabel('Predicted Log10 EW Blue Obs')
+ax[1].legend()
+plt.savefig(f'{folder_name}/blue_EW_data_vs_predicted_inc_{incs[inclination_column]}.png', dpi=300)
+plt.show()
+
+# plt.scatter(log_Y[:,0], predicted_log_Y[:,0], color='blue')
+# plt.plot(log_Y, log_Y)
+# plt.xlabel('Log10 EW Blue Obs')
+# plt.ylabel('Predicted Log10 EW Blue Obs')
+# plt.title('Linear regression model for blue EW python data')
+# plt.show()
+fig2, ax2 = plt.subplots(1,2, figsize=(10,5))
+ax2[0].scatter(log_Y[:,1], predicted_log_Y[:,1], color='red')
+ax2[0].plot(log_Y, log_Y, label='y=y_pred')
+ax2[0].set_xlabel('Log10 EW Red Obs')
+ax2[0].set_ylabel('Predicted Log10 EW Red Obs')
+ax2[0].set_title('Linear regression model for red EW python data')
+ax2[0].legend()
+# colour maps to run numbers
+temp2 = np.delete(grid_length, nan_values)
+target2 = ax2[1].scatter(log_Y[:,1], predicted_log_Y[:,1], c=temp2, cmap='rainbow')
+plt.colorbar(target2, ax=ax2[1], label='Grid Length')
+ax2[1].plot(log_Y, log_Y, label='y=y_pred')
+ax2[1].set_xlabel('Log10 EW Red Obs')
+ax2[1].set_ylabel('Predicted Log10 EW Red Obs')
+ax2[1].legend()
+plt.savefig(f'{folder_name}/red_EW_data_vs_predicted_inc_{incs[inclination_column]}.png', dpi=300)
+plt.show()
+
+
+# plt.scatter(log_Y[:,1], predicted_log_Y[:,1], color='red')
+# plt.plot(log_Y, log_Y)
+# plt.xlabel('Log10 EW Red Obs')
+# plt.ylabel('Predicted Log10 EW Red Obs')
+# plt.title('Linear regression model for red EW python data')
+# plt.show()
+
+# plt.scatter(log_Y[:,2], predicted_log_Y[:,2], color='darkblue')
+# plt.plot(log_Y, log_Y)
+# plt.xlabel('Log10 EW Blue Fit')
+# plt.ylabel('Predicted Log10 EW Blue Fit')
+# plt.title('Linear regression model for blue EW model fit data')
+# plt.show()
+
+# plt.scatter(log_Y[:,3], predicted_log_Y[:,3], color='darkred')
+# plt.plot(log_Y, log_Y)
+# plt.xlabel('Log10 EW Red Fit')
+# plt.ylabel('Predicted Log10 EW Red Fit')
+# plt.title('Linear regression model for red EW model fit data')
+# plt.show()
+
+# %%
+# FEATURE RANKING THE PARAMETERS
+from sklearn.feature_selection import RFE
+
+model = LinearRegression()
+rfe = RFE(model, n_features_to_select=1)
+rfe.fit(log_X, log_Y)
+rfe_predicted = rfe.predict(log_X)
+
+# only the selected features that are true
+selected_features = [param for param, support in zip(sim_parameters, rfe.support_) if support]
+ranking = rfe.ranking_
+
+print('Selected Features:', selected_features)
+print('Feature Ranking:', ranking)
+
+# %%
+# Splitting the data into training and testing sets, checking for overfitting
+log_X_train, log_X_test, log_Y_train, log_Y_test = train_test_split(log_X, log_Y, test_size=0.2, random_state=0)
+
+model = LinearRegression()
+model.fit(log_X_train, log_Y_train)
 
 # %%
 ################################################################################
@@ -1392,7 +2040,7 @@ print('END OF CODE')
 # -------------------------------------------------------------------
 # %%
 # Equivalent Width Function 
-# def equivalent_width(wavelengths, fluxes, continuum):
+# def equivalent_width_excess(wavelengths, fluxes, continuum):
 #     residual = 1 - (fluxes / continuum) # normalizing the fluxes
 #     dispersion = np.mean(np.diff(wavelengths)) # dispersion of the wavelength
 #     print(dispersion)
@@ -1429,7 +2077,7 @@ print('END OF CODE')
 
 # grid_index = 0
 # con = continuum(wavelengths, grid[grid_index])
-# equi_w = equivalent_width(wavelengths, grid[grid_index], con)
+# equi_w = equivalent_width_excess(wavelengths, grid[grid_index], con)
 # print(equi_w)
 
 
@@ -1908,7 +2556,7 @@ print('END OF CODE')
 
 
 
-# def equivalent_width(wavelengths, data, gaussian_fit, continuum_fit, shift='blue', peak_mask=(0,1000)):
+# def equivalent_width_excess(wavelengths, data, gaussian_fit, continuum_fit, shift='blue', peak_mask=(0,1000)):
 #     """ Returning the equivalent width excesses for each spectrum in the grid.
 #     You can choose to return the blue or red wing excesses by setting the shift.
 #     Formula: EW_excess = sum((data - gaussian_fit) / continuum_fit) * delta_wavelength
