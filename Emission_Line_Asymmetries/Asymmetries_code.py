@@ -1066,19 +1066,36 @@ anim.running = True # setting off animation
 ################################################################################
 print('STEP 12: FINDING TRENDS IN THE DATA')
 ################################################################################
-
-# Make a plots folder with todaydate and inc in the name
+# module imports for all trends sections
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import Ridge
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_val_predict
+from sklearn.feature_selection import RFE
+from sklearn.neural_network import MLPRegressor
+from IPython.display import display, Math, Latex, Markdown
+import scipy.stats as stats
+import pandas as pd
 import datetime
 import os
+
+# Make a plots folder with todaydate and inc in the name
 today = datetime.date.today()
 today = today.strftime("%d-%m-%Y")
 inc = incs[inclination_column]
 folder_name = f'Plots/{today}_inc_{inc}'
+scatterplots = f'{folder_name}/scatter_plots'
 if not os.path.exists(folder_name):
     os.makedirs(folder_name)
-    
+    os.makedirs(scatterplots)
 
-#TODO work on finding trends in the data
+################################################################################
+print('TRENDS: EW EXCESSES VS SIMULATION PARAMETERS CORNERPLOT')
+################################################################################
+%matplotlib inline
 
 # importing the run parameter combinations
 # Loading run files parameter combinations from pretty table file
@@ -1105,13 +1122,13 @@ combination_table = np.delete(combination_table, 0, 1) # array, index position, 
 combination_table = np.delete(combination_table, 0, 1) # array, index position, axis
 combination_table = np.delete(combination_table, -1, 1) # array, index position, axis
 
-sim_parameters = ['$\dot{M}_{disk}$',
-        '$\dot{M}_{wind}$',
-        '$KWD.d$',
-        '$r_{exp}$',
-        '$acc_{length}$',
-        '$acc_{exp}$'
-        ]
+sim_parameters = [r'$\dot{M}_{disk}$',
+        r'$\dot{M}_{wind}$',
+        r'$KWD.d$',
+        r'$r_{exp}$',
+        r'$acc_{length}$',
+        r'$acc_{exp}$'
+        ] # PYTHON Parameters
 
 cut_parameter_table = np.delete(parameter_table, cut_runs, 0)
 # plotting the blue excess widths as a cornerplot style plot comparing two 
@@ -1174,9 +1191,7 @@ def blue_3d():
     fig.text(0.8, 0.85, 'Blue = positive EW excess', ha='center', fontsize=30, color='blue')
     fig.text(0.8, 0.80, 'Green = negative EW excess', ha='center', fontsize=30, color='green')
     fig.text(0.8, 0.75, 'Z axis is magnitude of EW excess', ha='center', fontsize=30)
-    fig.text(0.8, 0.70, 'The more faded the datapoint, \n the less confidence in the value', ha='center', fontsize=30)
-    # plt.subplots_adjust(left=-0.3, wspace=0.05, hspace=0.05)
-    # plt.tight_layout()
+    fig.text(0.8, 0.65, 'The more faded the datapoint, \n the less confidence in the value', ha='center', fontsize=30)
     plt.show()
 
 def red_2d():
@@ -1232,66 +1247,78 @@ def red_2d():
     plt.show()
 
 # use functions to show plots
-%matplotlib inline
 blue_3d()
 red_2d()
 
 # %%
+################################################################################
+print('TRENDS: EW EXCESSES VS SIMULATION PARAMETERS CORRELATION MATRIX')
+################################################################################
 %matplotlib inline
-# performing PCA on the Excess EW data with different parameter combinations to see if there are any trends in the data
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
-import scipy.stats as stats
 
-# Add cut_blue and cut_red ew excesses to the parameter table
-data = np.column_stack((np.delete(cut_parameter_table, 0, 1), cut_blue_ew_excess, cut_red_ew_excess))
+# Add cut_blue and cut_red_ew_excesses to the parameter table
+parameter_and_excess_data = np.column_stack((np.delete(cut_parameter_table, 0, 1),
+                        cut_blue_ew_excess, 
+                        cut_red_ew_excess
+                        ))
 feature_names = sim_parameters + ['Blue EW Excess', 'Red EW Excess']
 
-# standardising the data
+# standardising the data and converting to a pandas dataframe
 scaler = StandardScaler()
-X = scaler.fit_transform(data)
-
-ax = plt.axes()
-
-# convert X to a pandas dataframe
-import pandas as pd
+X = scaler.fit_transform(parameter_and_excess_data)
 X = pd.DataFrame(X, columns=feature_names)
+
+# only the red and blue EW excesses rows
 corr = X.corr(method='spearman')
-#im = ax.imshow(np.corrcoef(X.T), cmap="bwr", vmin=-1, vmax=1)
-im = ax.imshow(corr, cmap="bwr", vmin=-1, vmax=1)
+corr = corr.loc[['Blue EW Excess', 'Red EW Excess'], :] 
 
-
-ax.set_xticks([0, 1, 2, 3, 4, 5, 6, 7])
+# plot the correlation matrix
+ax = plt.axes()
+im = ax.imshow(corr, cmap="bwr", vmin=-1, vmax=1) # matrix (-1/1 for colorbar)
+plt.colorbar(im).ax.set_ylabel("$r$", rotation=0) # adding colorbar
+ax.set_xticks([0, 1, 2, 3, 4, 5, 6, 7]) # column parameters
 ax.set_xticklabels(list(feature_names), rotation=90)
-ax.set_yticks([0, 1, 2, 3, 4, 5, 6, 7])
-ax.set_yticklabels(list(feature_names))
-# hide the grid lines
-ax.grid(False)
-plt.colorbar(im).ax.set_ylabel("$r$", rotation=0)
+ax.set_yticks([0, 1]) # only red, blue excess rows
+ax.set_yticklabels(['Blue EW Excess', 'Red EW Excess'])
+ax.grid(False) # hide the grid lines
 ax.set_title(f"A correlation matrix at {incs[inclination_column]} inc")
 plt.tight_layout()
 plt.savefig(f'{folder_name}/correlation_matrix.png', dpi=300)
 plt.show()
 
-#performing PCA
+display(corr) # display correlation matrix values in a table
+
+# %%
+################################################################################
+print('TRENDS: PCA ON THE DATA? (CAN SKIP)')
+################################################################################
+# TODO: Can I use PCA to see if there are any trends
+
+# performing PCA with scaled parameter and excess data
 pca = PCA()
 pca.fit(X)
 
-#creating a CDF like plot summing the variance explained to 1 with increasing number of components
+# creating a CDF like plot summing the variance explained to 1 with increasing number of components
 plt.plot(np.cumsum(pca.explained_variance_ratio_), marker='o')
 plt.xlabel('Number of Principal Components')
 plt.ylabel('Explained Variance Ratio')
 plt.title('Explained Variance Ratio of PCA')
-
 plt.savefig(f'{folder_name}/PCA_explained_variance_ratio_inc_{incs[inclination_column]}.png', dpi=300)
 plt.show()
 
 # %%
+################################################################################
+print('TRENDS: SCATTERPLOTS DISTRIBUTION OF THE DATA WITH A GIVEN PARAMETER')
+################################################################################
 %matplotlib inline
+
+# For plt.savefig
 saving_plot_names = ['Mdot_disk', 'Mdot_wind', 'KWD.d', 'r_exp', 'acc_length', 'acc_exp']
 
+# Hard coded Wind mass loss rate figures to simplify the code (multiple*M_acc rate)
 windlist = [[9e-11, 3e-10, 9e-10], [3e-10, 1e-9, 3e-9], [9e-10, 3e-9, 9e-9]]
-windvalues = [0.03, 0.1, 0.3]
+windvalues = [0.03, 0.1, 0.3] # The wind mass loss rate multiples
+
 for j in range(0,6):
     for i in range(0,3):
         plt.errorbar(cut_red_ew_excess,
@@ -1303,6 +1330,7 @@ for j in range(0,6):
                     alpha=0.2,
                     zorder = 0
                     ) # error bars for scatterplot below
+        
         #plotting red scatters of individual parameters
         chosen_parameter_row = i # changes value
         chosen_parameter_column = j # changes parameter 1 is dodgy atm 
@@ -1316,9 +1344,8 @@ for j in range(0,6):
                                 s=15, 
                                 zorder = 1
                                 )
-                    #print(f'plotting run {run}')
+                    
             elif chosen_parameter_column == 1: # TODO not plotting all available points yet
-                #print(f'value = {value}')
                 # index where value is in windvalues
                 wind_multiple = cut_parameter_table[index][1+1] / cut_parameter_table[index][0+1]
                 if f'{wind_multiple:.3e}' == f'{float(value):.3e}':
@@ -1328,20 +1355,6 @@ for j in range(0,6):
                                 s=15, 
                                 zorder = 1
                                 )
-                
-                # l = windvalues.index(value)
-                # for k, wind in enumerate(windlist[l]):
-                #    #print(f'wind = {wind}, run = {run[chosen_parameter_column+1]}')
-                #     if f'{run[chosen_parameter_column+1]:.3e}' == f'{wind:.3e}':
-                #         plt.scatter(cut_red_ew_excess[index], 
-                #                     cut_blue_ew_excess[index], 
-                #                     c='green', 
-                #                     s=15, 
-                #                     zorder = 1
-                #                     )
-                #         #print(f'plotting run {run}')
-                #     break
-
 
         # vertical and horizontal lines at 0 i.e axes
         plt.axvline(x=0, color='black', linestyle='--', alpha=0.5, zorder = 1)
@@ -1354,26 +1367,39 @@ for j in range(0,6):
         plt.xlim(min(cut_red_ew_excess)-2,max(cut_red_ew_excess)+2)
         plt.ylim(min(cut_blue_ew_excess)-2,max(cut_blue_ew_excess)+2)
         plt.title(f'highlighting {feature_names[chosen_parameter_column]} = {value}, inc = {incs[inclination_column]}°')
-        plt.savefig(f'{folder_name}/highlighting_{saving_plot_names[chosen_parameter_column]}_{value}_inc_{incs[inclination_column]}.png', dpi=300)
+        plt.savefig(f'{folder_name}/scatter_plots/highlighting_{saving_plot_names[chosen_parameter_column]}_{value}_inc_{incs[inclination_column]}.png', dpi=300)
         plt.show()
 
 
 # %%
-
+################################################################################
+print('TRENDS: VIEWING THE EXCESS VALUES IN A 3D PLOT OF 3 CHOSEN PARAMETERS')
+################################################################################
 %matplotlib qt
 
-unique_points = combination_table.T
-unique_combinations = np.delete(cut_parameter_table, 0, 1)
-point_sizes = cut_blue_ew_excess # YOU CAN CHANGE THIS TO RED
-print(np.shape(unique_points), np.shape(unique_combinations), np.shape(point_sizes))
+# !Code originally pulled from emulator code. Adapted for excess values instead 
+# of PCA weights with the emulator. 
 
-# changing windmdot to be a multiple 
+##### USER INPUT BELOW #####
+desired_parameters = [1,2,4] # 0-5, pick 3, corresponds to parameter names
+############################
+
+latex_symbols = (f'Chosen parameters: {sim_parameters[desired_parameters[0]]}, {sim_parameters[desired_parameters[1]]}, {sim_parameters[desired_parameters[2]]}')
+display(Latex(latex_symbols))
+
+# Generating the data for the 3D plot
+unique_points = combination_table.T # np.shape(6,3)
+unique_combinations = np.delete(cut_parameter_table, 0, 1) # np.shape(268,6)
+point_sizes = cut_blue_ew_excess # YOU CAN CHANGE THIS TO RED
+
+# changing windmdot to be a multiple from combination data
 for i in range(len(unique_combinations)):
     unique_combinations[i][1] = unique_combinations[i][1]/unique_combinations[i][0]
-    
-desired_parameters = [1,2,4] # 0-5 pick 3
+
+# finding which parameters weren't chosen by the user
 fixed_parameters = [i for i in range(6) if i not in desired_parameters]
 
+# finding all combinations which have the specified fixed parameter values
 fixed_combinations = []
 fixed_combination = [list(i) for i in unique_points[fixed_parameters]]
 for i in itertools.product(*fixed_combination):
@@ -1383,8 +1409,9 @@ for i in range(len(fixed_combinations)):
 
 # Animation for the EW excess plots showing the data for particular runs
 def function_for_data(val,fixed_combinations, unique_combinations, fixed_parameters):
-    # fitting the data where we plot 3 parameters with excess quilealent widths as the size of the points
-    # and then the 27 frams interate over the other 3 parameters
+    # fitting the data where we plot 3 parameters with excess equilivalent 
+    # widths as the sizes of the points. The fixed parameter values are set at 
+    # by the slider value 0-27, iterating over the fixed_combinations list.
     fixed = fixed_combinations[val]
     x = []
     y = []
@@ -1517,34 +1544,93 @@ anim = FuncAnimation(fig,
 anim.running = True # setting off animation
 
 # %%
-# Simple linear regression of EW excesses vs simulation parameters
-from sklearn.linear_model import LinearRegression
+################################################################################
+print('TRENDS: LINEAR REGRESSION OF THE EW EXCESSES VS SIMULATION PARAMETERS')
+################################################################################
+%matplotlib inline
+# Simple linear regression
 
-# TODO Use EW values instead of EW excess
 #y = ax_1 + bx_2 + cx_3 + dx_4 + ex_5 + fx_6 + g
-#x = [mdot_disk, mdot_wind, kwd.d, r_exp, acc_length, acc_exp]
-#y = [blue_ew_excess, red_ew_excess]
+display(Math(r'y = ax_1 + bx_2 + cx_3 + dx_4 + ex_5 + fx_6 + g'))
+
+# Redo-ing the label formatting for LaTeX equation outputs
+sim_parameters = [r'\dot{M}_{disk}',
+        r'\dot{M}_{wind}',
+        r'KWD.d',
+        r'r_{exp}',
+        r'acc_{length}',
+        r'acc_{exp}'
+        ] # r for raw string to ignore escape sequences
 
 # setting up the data cutting the first column 
 X = cut_parameter_table[:,1:]
+
+# only log10 the 0th, 1st, 2nd, and 4th columns. keep the rest the same
+log_X = np.column_stack((np.log10(X[:,0]),
+                         np.log10(X[:,1]),
+                         np.log10(X[:,2]),
+                         X[:,3],
+                         np.log10(X[:,4]),
+                         X[:,5]
+                         ))
+
 Y = np.column_stack((cut_blue_ew_excess, cut_red_ew_excess))
-log_X = np.log(X)
 
 # setting up the linear regression model
 model = LinearRegression()
-model.fit(X, Y)
+model.fit(log_X, Y)
 
 # printing the coefficients
-print(f'Coefficients: {model.coef_}')
-print(f'Intercept: {model.intercept_}')
-print(model.score(X, Y)) # R^2 value
+print(f'R^2 score: {model.score(log_X, Y)}') # R^2 value
 
-# print out my model equation from the coefficient and intercept 
-# y = ax_1 + bx_2 + cx_3 + dx_4 + ex_5 + fx_6 + g
-print(f'y = {model.coef_[0][0]:.3f}mdot_disk + {model.coef_[0][1]:.3f}mdot_wind + {model.coef_[0][2]:.3f}kwd.d + {model.coef_[0][3]:.3f}r_exp + {model.coef_[0][4]:.3f}acc_length + {model.coef_[0][5]:.3f}acc_exp + {model.intercept_[0]:.3f}')
-print(f'y = {model.coef_[1][0]:.3f}mdot_disk + {model.coef_[1][1]:.3f}mdot_wind + {model.coef_[1][2]:.3f}kwd.d + {model.coef_[1][3]:.3f}r_exp + {model.coef_[1][4]:.3f}acc_length + {model.coef_[1][5]:.3f}acc_exp + {model.intercept_[1]:.3f}')
+print('Linear Regression model for Blue_ew_excess') # in LaTeX style
+
+# input variables into the string
+eqn_blue = f'y = {model.coef_[0][0]:.3f}{sim_parameters[0]} + {model.coef_[0][1]:.3f}{sim_parameters[1]} + {model.coef_[0][2]:.3f}{sim_parameters[2]} + {model.coef_[0][3]:.3f}{sim_parameters[3]} + {model.coef_[0][4]:.3f}{sim_parameters[4]} + {model.coef_[0][5]:.3f}{sim_parameters[5]} + {model.intercept_[0]:.3f}$'
+display(Math(f'{eqn_blue}')) # Latex formatted string to LaTeX output
+
+print('Linear Regression model for Red_ew_excess') # in LaTeX style
+
+# input variables into the string
+eqn_red = f'y = {model.coef_[1][0]:.3f}{sim_parameters[0]} + {model.coef_[1][1]:.3f}{sim_parameters[1]} + {model.coef_[1][2]:.3f}{sim_parameters[2]} + {model.coef_[1][3]:.3f}{sim_parameters[3]} + {model.coef_[1][4]:.3f}{sim_parameters[4]} + {model.coef_[1][5]:.3f}{sim_parameters[5]} + {model.intercept_[1]:.3f}$'
+display(Math(f'{eqn_red}')) # Latex formatted string to LaTeX output
+
+y_pred_blue_excess = model.predict(log_X)[:,0]
+y_pred_red_excess = model.predict(log_X)[:,1]
+
+# plotting the linear regression model
+fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+ax[0].scatter(y_pred_blue_excess, Y[:,0], color='blue')
+ax[0].plot([min(Y[:,0]), max(Y[:,0])], [min(Y[:,0]), max(Y[:,0])], color='black', linestyle='--')
+ax[0].set_xlabel('Predicted Blue EW Excess')
+ax[0].set_ylabel('Actual Blue EW Excess')
+ax[0].set_title('Blue EW Excess Linear Regression Model')
+
+ax[1].scatter(y_pred_red_excess, Y[:,1], color='red')
+ax[1].plot([min(Y[:,1]), max(Y[:,1])], [min(Y[:,1]), max(Y[:,1])], color='black', linestyle='--')
+ax[1].set_xlabel('Predicted Red EW Excess')
+ax[1].set_ylabel('Actual Red EW Excess')
+ax[1].set_title('Red EW Excess Linear Regression Model')
+
+plt.tight_layout()
+plt.savefig(f'{folder_name}/linear_regression_model_excesses.png', dpi=300)
+plt.show()
+
 
 # %%
+################################################################################
+print('TRENDS: CALCULATING EQUIVALENT WIDTHS OF THE LINES')
+################################################################################
+%matplotlib inline
+
+# At this point, excesses seem to be a waste of time. There isn't strong 
+# regression relations, red/blue wing correlations and the diagnostic plots
+# do not indicate any similarity to Teo's work. It's governed by noise and the 
+# choice of masking profile over the emission line. We move onto working with
+# simply the equivalent widths of a line and see if there are any trends.
+# The equivalent widths are more robust as they don't require a fit to the 
+# profile of the line with a Gaussian + continuum function. 
+
 def equivalent_width(wavelengths, fluxes, continuum, colour) -> list:
     """Calculates the equivalent width of an emission line given the wavelengths,
     fluxes and continuum for a single spectrum
@@ -1552,7 +1638,7 @@ def equivalent_width(wavelengths, fluxes, continuum, colour) -> list:
         wavelengths (list): uneven array of wavelengths
         fluxes (list): uneven array of fluxes
         continuum (list): uneven array of continuum values
-        colour (str): blue or red side of H_alpha line
+        colour (str): blue or red side of H_alpha line, or all
     Returns:
         equivalent_width (float): equivalent width of the line"""
     
@@ -1567,6 +1653,8 @@ def equivalent_width(wavelengths, fluxes, continuum, colour) -> list:
         peak_mask = (wavelengths < H_alpha)
     elif colour == 'red':
         peak_mask = (wavelengths > H_alpha)
+    elif colour == 'all':
+        peak_mask = np.array([True] * len(wavelengths))
     else:
         print('Please enter a valid colour: blue or red')
     
@@ -1587,7 +1675,7 @@ test_fit_blue = equivalent_width(final_results['wavelength_grid'][test_run],
                             final_results['fitted_grid'][test_run], 
                             final_results['fit_con'][test_run],
                             'blue')
-print(test_data_blue, test_fit_blue)
+print(f'EW_Data_blue = {test_data_blue:.3f}, EW_Fit_blue = {test_fit_blue:.3f}')
 test_data_red = equivalent_width(final_results['wavelength_grid'][test_run],
                                 final_results['grid'][test_run],
                                 final_results['sk_con_data'][test_run], 
@@ -1596,21 +1684,42 @@ test_fit_red = equivalent_width(final_results['wavelength_grid'][test_run],
                                 final_results['fitted_grid'][test_run],
                                 final_results['fit_con'][test_run],
                                 'red')
-print(test_data_red, test_fit_red)
-    
-%matplotlib inline
-plt.plot(final_results['wavelength_grid'][test_run], final_results['grid'][test_run], label='Original Data', color='black')
-plt.plot(final_results['wavelength_grid'][test_run], final_results['sk_con_data'][test_run], label='Sklearn Continuum', color='green')
+print(f'EW_Data_red = {test_data_red:.3f}, EW_Fit_red = {test_fit_red:.3f}')
+
+plt.plot(final_results['wavelength_grid'][test_run],
+         final_results['grid'][test_run], 
+         label='Original Data',
+         color='black'
+         )
+plt.plot(final_results['wavelength_grid'][test_run], 
+         final_results['sk_con_data'][test_run],
+         label='Sklearn Continuum',
+         color='green'
+         )
 plt.axvline(x=H_alpha, color='black', linestyle='--', alpha=0.5)
 plt.axvline(x=(H_alpha-test_data_blue), color='blue', linestyle='--', alpha=0.5)
 plt.axvline(x=(H_alpha+test_data_red), color='red', linestyle='--', alpha=0.5)
+plt.xlabel('Wavelength ($Å$)')
+plt.ylabel('Flux ($erg/s/cm^2/Å$) at 100.0 parsecs')
+plt.title(f'Plotting a test example of the EW calculation for a PYTHON run \n run {test_run}')
 plt.show()
 
-plt.plot(final_results['wavelength_grid'][test_run], final_results['fitted_grid'][test_run], label='Optimal Gaussian with Continuum', color='red')
-plt.plot(final_results['wavelength_grid'][test_run], final_results['fit_con'][test_run], label='Fitted Continuum', color='blue')
+plt.plot(final_results['wavelength_grid'][test_run],
+         final_results['fitted_grid'][test_run],
+         label='Optimal Gaussian with Continuum', 
+         color='red'
+         )
+plt.plot(final_results['wavelength_grid'][test_run],
+         final_results['fit_con'][test_run], 
+         label='Fitted Continuum',
+         color='blue'
+         )
 plt.axvline(x=H_alpha, color='black', linestyle='--', alpha=0.5)
 plt.axvline(x=(H_alpha-test_fit_blue), color='blue', linestyle='--', alpha=0.5)
 plt.axvline(x=(H_alpha+test_fit_red), color='red', linestyle='--', alpha=0.5)
+plt.title(f'Plotting a test example of the EW calculation for a model fit \n run {test_run}')
+plt.xlabel('Wavelength ($Å$)')
+plt.ylabel('Flux ($erg/s/cm^2/Å$) at 100.0 parsecs')
 plt.show()
 
 # collecting EWs throughout the grid
@@ -1635,20 +1744,53 @@ cut_ew_data_blue = np.delete(ew_data_blue, cut_runs)
 cut_ew_fit_blue = np.delete(ew_fit_blue, cut_runs)
 cut_ew_data_red = np.delete(ew_data_red, cut_runs)
 cut_ew_fit_red = np.delete(ew_fit_red, cut_runs)
+cut_grid_length = np.delete(grid_length, cut_runs)
 
-# plotting the blue EWs of the data and the fit
-x = np.linspace(min(np.log(ew_fit_blue)), max(np.log(ew_fit_blue)), 200)
+# cutting out the negative ew values as it'll prompt warming everywhere when log
+negative_runs_data = []
+for i, _ in enumerate(ew_data_blue):
+    if ew_data_blue[i] <= 0 or ew_data_red[i] <= 0:
+        negative_runs_data.append(i)
+
+negative_runs_fit = []
+for i, _ in enumerate(ew_fit_blue):
+    if ew_fit_blue[i] <= 0 or ew_fit_red[i] <= 0:
+        negative_runs_fit.append(i)
+
+negative_runs = sorted(list(set(negative_runs_data + negative_runs_fit)))
+
+ew_data_blue = np.delete(ew_data_blue, negative_runs)
+ew_fit_blue = np.delete(ew_fit_blue, negative_runs)
+ew_data_red = np.delete(ew_data_red, negative_runs)
+ew_fit_red = np.delete(ew_fit_red, negative_runs)
+grid_length = np.delete(grid_length, negative_runs)
+
+# Checking the cut run data is cutting poor EW fits. 
+# plotting the blue EWs of the data and against the fit EW
+x = np.linspace(min(np.log10(ew_fit_blue)), max(np.log10(ew_fit_blue)), 200)
 fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-target = axs[0].scatter(np.log(ew_fit_blue), np.log(ew_data_blue), label='Blue EWs', c=grid_length, cmap='rainbow')
+target = axs[0].scatter(np.log10(ew_fit_blue),
+                        np.log10(ew_data_blue),
+                        label='Blue EWs',
+                        c=grid_length,
+                        cmap='rainbow'
+                        )
 axs[0].plot(x, x, color='black', linestyle='--', alpha=0.5)
 axs[0].set_title('All Spectral Runs Blue EWs')
 axs[0].set_xlabel('Log(Fit EW)')
 axs[0].set_ylabel('Log(Obs EW)')
-target2 = axs[1].scatter(np.log(cut_ew_fit_blue), np.log(cut_ew_data_blue), label='Blue EWs', c=cut_grid_length, cmap='rainbow')
+
+# plotting the blue EWs of the cut data and against the fit EW
+target2 = axs[1].scatter(np.log10(cut_ew_fit_blue),
+                         np.log10(cut_ew_data_blue),
+                         label='Blue EWs',
+                         c=cut_grid_length,
+                         cmap='rainbow'
+                         )
 axs[1].plot(x, x, color='black', linestyle='--', alpha=0.5)
 axs[1].set_title('Only Spectral Run After Cut Blue EWs')
-axs[1].set_xlabel('Log(Fit EW)')
-axs[1].set_ylabel('Log(Obs EW)')
+axs[1].set_xlabel('Log10(Fit EW)')
+axs[1].set_ylabel('Log10(Obs EW)')
 plt.colorbar(target, ax=axs[0], label='Grid Length')
 plt.colorbar(target2, ax=axs[1], label='Grid Length')
 plt.tight_layout()
@@ -1656,18 +1798,31 @@ plt.savefig(f'{folder_name}/blue_EWs_model_vs_data_inc_{incs[inclination_column]
 plt.show()
 
 # Now for red EWs
-x = np.linspace(min(np.log(ew_fit_red)), max(np.log(ew_fit_red)), 200)
+# plotting the red EWs of the data and against the fit EW
+x = np.linspace(min(np.log10(ew_fit_red)), max(np.log10(ew_fit_red)), 200)
 fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-target3 = axs[0].scatter(np.log(ew_fit_red), np.log(ew_data_red), label='Red EWs', c=grid_length, cmap='rainbow')
+target3 = axs[0].scatter(np.log10(ew_fit_red),
+                         np.log10(ew_data_red),
+                         label='Red EWs',
+                         c=grid_length,
+                         cmap='rainbow'
+                         )
 axs[0].plot(x, x, color='black', linestyle='--', alpha=0.3)
 axs[0].set_title('All Spectral Runs Red EWs')
 axs[0].set_xlabel('Log(Fit EW)')
 axs[0].set_ylabel('Log(Obs EW)')
-target4 = axs[1].scatter(np.log(cut_ew_fit_red), np.log(cut_ew_data_red), label='Red EWs', c=cut_grid_length, cmap='rainbow')
+
+# plotting the red EWs of the cut data and against the fit EW
+target4 = axs[1].scatter(np.log10(cut_ew_fit_red),
+                         np.log10(cut_ew_data_red),
+                         label='Red EWs',
+                         c=cut_grid_length,
+                         cmap='rainbow'
+                         )
 axs[1].plot(x, x, color='black', linestyle='--', alpha=0.3)
 axs[1].set_title('Only Spectral Run After Cut Red EWs')
-axs[1].set_xlabel('Log(Fit EW)')
-axs[1].set_ylabel('Log(Obs EW)')
+axs[1].set_xlabel('Log10(Fit EW)')
+axs[1].set_ylabel('Log10(Obs EW)')
 plt.colorbar(target3, ax=axs[0], label='Grid Length')
 plt.colorbar(target4, ax=axs[1], label='Grid Length')
 plt.tight_layout()
@@ -1675,10 +1830,24 @@ plt.savefig(f'{folder_name}/red_EWs_model_vs_data_inc_{incs[inclination_column]}
 plt.show()
 
 # %%
+################################################################################
+print('TRENDS: PLOTTING RED EW VS BLUE EW FOR A GIVEN INCLINATION')
+################################################################################
 %matplotlib inline
+
+# This is to see if there is a strong correlation between the red and blue EWs
+# As there is, there is unlikely a strong difference in the asymmetries. 
+
+# for the y=x line
 x = np.linspace(min(cut_ew_data_blue), max(cut_ew_data_blue), 200)
-# Plot a diagnostic plot of the blue vs red EW
-target = plt.scatter(cut_ew_data_red, cut_ew_data_blue, label='EWs', c=cut_grid_length, cmap='rainbow')
+
+# Plot a diagnostic plot of the blue vs red EW in linear space
+target = plt.scatter(cut_ew_data_red,
+                     cut_ew_data_blue,
+                     label='EWs',
+                     c=cut_grid_length,
+                     cmap='rainbow'
+                     )
 plt.colorbar(target, label='Grid Length')
 plt.plot(x,x, color='black', linestyle='--', alpha=0.3, label='y=x')
 plt.xlabel('Red EW')
@@ -1687,41 +1856,48 @@ plt.title(f'Red vs Blue EWs for inclination {incs[inclination_column]}°')
 plt.savefig(f'{folder_name}/red_vs_blue_EWs_inc_{incs[inclination_column]}.png', dpi=300)
 plt.show()
 
-target2 = plt.scatter(np.log10(cut_ew_data_red), np.log10(cut_ew_data_blue), label='EWs', c=cut_grid_length, cmap='rainbow')
+# Plot a diagnostic plot of the blue vs red EW in log space
+#TODO
+target2 = plt.scatter(np.log10(ew_data_red),
+                      np.log10(ew_data_blue),
+                      label='EWs',
+                      c=grid_length,
+                      cmap='rainbow'
+                      )
 plt.colorbar(target2, label='Grid Length')
 plt.plot(np.log10(x),np.log10(x), color='black', linestyle='--', alpha=0.3, label='y=x')
-plt.xlabel('Log(Red EW)')
-plt.ylabel('Log(Blue EW)')
+plt.xlabel('Log10(Red EW)')
+plt.ylabel('Log10(Blue EW)')
 plt.title(f'Log10 Red vs Blue EWs for inclination {incs[inclination_column]}°')
 plt.savefig(f'{folder_name}/log_red_vs_blue_EWs_inc_{incs[inclination_column]}.png', dpi=300)
 plt.show()
 
 # %%
-# Simple linear regression of EW excesses vs simulation parameters
-from sklearn.linear_model import LinearRegression
-from sklearn.linear_model import Ridge
-from sklearn.model_selection import train_test_split
+################################################################################
+print('TRENDS: LINEAR REGRESSION OF THE EW PYTHON DATA VS SIMULATION PARAMETERS')
+################################################################################
 
-# TODO Use EW values instead of EW excess
-#y = ax_1 + bx_2 + cx_3 + dx_4 + ex_5 + fx_6 + g
-#x = [mdot_disk, mdot_wind, kwd.d, r_exp, acc_length, acc_exp]
-#y = [blue_ew, red_ew]
+# Simple linear regression of EW vs simulation parameters
 
 # setting up the data cutting the first column 
 X = parameter_table[:,1:] # cut_parameter_table
-#Y = np.column_stack((np.log(ew_data_blue), np.log(ew_data_red), np.log(ew_fit_blue), np.log(ew_fit_red)))
+X = np.delete(X, negative_runs, axis=0)
+
 # if any Y element are <0 then set to 1e-50
+log_Y = np.column_stack((np.log10(ew_data_blue), np.log10(ew_data_red)))
 
-
-log_Y = np.column_stack((np.log10(ew_data_blue), np.log10(ew_data_red)))#, np.log10(cut_ew_fit_blue), np.log10(cut_ew_fit_red)))
 #find the NaN values in log_Y and store the index of the location
 nan_values = np.argwhere(np.isnan(log_Y))
 log_Y = np.delete(log_Y, nan_values, axis=0)
-#log_Y = np.log10(cut_ew_data_blue)
-#log_Y = np.where(log_Y == float('nan'), 1e-50, log_Y)
-#replace 0's in X with a 1e-50 to avoid log(0) error
-X = np.where(X == 0, 1e-50, X)
-log_X = np.log10(X)
+
+# only log10 the 0th, 1st, 2nd, and 4th columns. keep the rest the same
+log_X = np.column_stack((np.log10(X[:,0]),
+                         np.log10(X[:,1]),
+                         np.log10(X[:,2]), 
+                         X[:,3],
+                         np.log10(X[:,4]),
+                         X[:,5]
+                         ))
 log_X = np.delete(log_X, nan_values, axis=0)
 
 # setting up the linear regression model
@@ -1729,122 +1905,269 @@ model = LinearRegression()
 #model = Ridge(alpha=0.1)
 model.fit(log_X, log_Y)
 
-# printing the coefficients
-print(f'Coefficients: \n {model.coef_}')
-print(f'Intercept: \n {model.intercept_}')
 print(f'R^2 Score: \n {model.score(log_X, log_Y)}') # R^2 value
 
 # print out my model equation from the coefficient and intercept 
-print('\nEquation for log(EW) = alog(p1) + blog(p2) + clog(p3) + dlog(p4) + elog(p5) + flog(p6) + g \n')
-# y = ax_1 + bx_2 + cx_3 + dx_4 + ex_5 + fx_6 + g
-#print(f'y = {model.coef_[0]:.3f}mdot_disk + {model.coef_[1]:.3f}mdot_wind + {model.coef_[2]:.3f}kwd.d + {model.coef_[3]:.3f}r_exp + {model.coef_[4]:.3f}acc_length + {model.coef_[5]:.3f}acc_exp + {model.intercept_:.3f}')
-#print(f'y = {model.coef_[0][0]:.3e}mdot_disk + {model.coef_[0][1]:.3e}mdot_wind + {model.coef_[0][2]:.3e}kwd.d + {model.coef_[0][3]:.3e}r_exp + {model.coef_[0][4]:.3e}acc_length + {model.coef_[0][5]:.3e}acc_exp + {model.intercept_[0]:.3e} |Blue EW Data|')
-#print(f'y = {model.coef_[1][0]:.3e}mdot_disk + {model.coef_[1][1]:.3e}mdot_wind + {model.coef_[1][2]:.3e}kwd.d + {model.coef_[1][3]:.3e}r_exp + {model.coef_[1][4]:.3e}acc_length + {model.coef_[1][5]:.3e}acc_exp + {model.intercept_[1]:.3e} |Red EW Data|')
-#print(f'y = {model.coef_[2][0]:.3e}mdot_disk + {model.coef_[2][1]:.3e}mdot_wind + {model.coef_[2][2]:.3e}kwd.d + {model.coef_[2][3]:.3e}r_exp + {model.coef_[2][4]:.3e}acc_length + {model.coef_[2][5]:.3e}acc_exp + {model.intercept_[2]:.3e} |Blue EW Fit|')
-#print(f'y = {model.coef_[3][0]:.3e}mdot_disk + {model.coef_[3][1]:.3e}mdot_wind + {model.coef_[3][2]:.3e}kwd.d + {model.coef_[3][3]:.3e}r_exp + {model.coef_[3][4]:.3e}acc_length + {model.coef_[3][5]:.3e}acc_exp + {model.intercept_[3]:.3e} |Red EW Fit|')
+display(Math(r'log(EW) = alog(p1) + blog(p2) + clog(p3) + d * p4 + elog(p5) + f * p6 + g'))
 
-log_combination_table = np.where(combination_table == 0, 1e-50, combination_table)
-log_combination_table = np.log10(log_combination_table)
-# print parameter names
-print(sim_parameters)
-for i in range(len(log_combination_table)):
-    #print([f'{log_combination_table[i][j]:.3e}' for j in range(len(log_combination_table[i]))]) # exp format
-    print([f'{log_combination_table[i][j]:.3f}' for j in range(len(log_combination_table[i]))]) # normal format
-# print('\nEquation for log(EW) = a + b + c + d + e + f + g \n')
-# # y = ax_1 + bx_2 + cx_3 + dx_4 + ex_5 + fx_6 + g
-# print(f'y = {np.exp(model.coef_[0][0]):.3e}mdot_disk + {np.exp(model.coef_[0][1]):.3e}mdot_wind + {np.exp(model.coef_[0][2]):.3e}kwd.d + {np.exp(model.coef_[0][3]):.3e}r_exp + {np.exp(model.coef_[0][4]):.3e}acc_length + {np.exp(model.coef_[0][5]):.3e}acc_exp + {np.exp(model.intercept_[0]):.3e} |Blue EW Data|')
-# print(f'y = {np.exp(model.coef_[1][0]):.3e}mdot_disk + {np.exp(model.coef_[1][1]):.3e}mdot_wind + {np.exp(model.coef_[1][2]):.3e}kwd.d + {np.exp(model.coef_[1][3]):.3e}r_exp + {np.exp(model.coef_[1][4]):.3e}acc_length + {np.exp(model.coef_[1][5]):.3e}acc_exp + {np.exp(model.intercept_[1]):.3e} |Red EW Data|')
-# print(f'y = {np.exp(model.coef_[2][0]):.3e}mdot_disk + {np.exp(model.coef_[2][1]):.3e}mdot_wind + {np.exp(model.coef_[2][2]):.3e}kwd.d + {np.exp(model.coef_[2][3]):.3e}r_exp + {np.exp(model.coef_[2][4]):.3e}acc_length + {np.exp(model.coef_[2][5]):.3e}acc_exp + {np.exp(model.intercept_[2]):.3e} |Blue EW Fit|')
-# print(f'y = {np.exp(model.coef_[3][0]):.3e}mdot_disk + {np.exp(model.coef_[3][1]):.3e}mdot_wind + {np.exp(model.coef_[3][2]):.3e}kwd.d + {np.exp(model.coef_[3][3]):.3e}r_exp + {np.exp(model.coef_[3][4]):.3e}acc_length + {np.exp(model.coef_[3][5]):.3e}acc_exp + {np.exp(model.intercept_[3]):.3e} |Red EW Fit|')
+#log_combination_table = np.where(combination_table == 0, 1e-50, combination_table)
+log_combination_table = np.column_stack((np.log10(combination_table[:,0]), 
+                                         np.log10(combination_table[:,1]), 
+                                         np.log10(combination_table[:,2]), 
+                                         combination_table[:,3], 
+                                         np.log10(combination_table[:,4]),
+                                         combination_table[:,5]))
+# print parameter names and combinations
+print('-- The Combination Table of PYTHON parameters --')
+tabel_labels = ['log10(mdot_disk)',
+                'log10(mdot_wind)',
+                'log10(kwd.d)',
+                'r_exp',
+                'log10(acc_length)',
+                'acc_exp'
+                ]
+combi_table_df = pd.DataFrame(log_combination_table, columns=tabel_labels)
+display(combi_table_df)
 
-predicted_log_Y = model.predict(log_X)
-#x=y line
+print('Linear Regression model for Blue EW python data') # in LaTeX style
+
+# input variables into the string
+eqn_blue = f'log(EW_blue) = {model.coef_[0][0]:.3f}log({sim_parameters[0]}) + {model.coef_[0][1]:.3f}log({sim_parameters[1]}) + {model.coef_[0][2]:.3f}log({sim_parameters[2]}) + {model.coef_[0][3]:.3f}{sim_parameters[3]} + {model.coef_[0][4]:.3f}log({sim_parameters[4]}) + {model.coef_[0][5]:.3f}{sim_parameters[5]} + {model.intercept_[0]:.3f}$'
+display(Math(f'{eqn_blue}')) # Latex formatted string to LaTeX output
+
+print('Linear Regression model for Red EW python data') # in LaTeX style
+
+# input variables into the string
+eqn_red = f'log(EW_red) = {model.coef_[1][0]:.3f}log({sim_parameters[0]}) + {model.coef_[1][1]:.3f}log({sim_parameters[1]}) + {model.coef_[1][2]:.3f}log({sim_parameters[2]}) + {model.coef_[1][3]:.3f}{sim_parameters[3]} + {model.coef_[1][4]:.3f}log({sim_parameters[4]}) + {model.coef_[1][5]:.3f}{sim_parameters[5]} + {model.intercept_[1]:.3f}$'
+display(Math(f'{eqn_red}')) # Latex formatted string to LaTeX output
+
+
+predicted_log_Y = model.predict(log_X) # predicting the log_Y values from model
+
+# scatter plot comparing the predicted log_Y values to the actual log_Y values
+# The closer to a y=y_pred line, the better the model. Indicates R^2 value
+
+# plotting the linear regression model with colour map
 fig,ax = plt.subplots(1,2, figsize=(10,5))
-ax[0].scatter(log_Y[:,0], predicted_log_Y[:,0], color='blue')
-ax[0].plot(log_Y, log_Y, label='y=y_pred')
-ax[0].set_xlabel('Log10 EW Blue Obs')
-ax[0].set_ylabel('Predicted Log10 EW Blue Obs')
+ax[0].scatter(predicted_log_Y[:,0], log_Y[:,0], color='blue') # log_Y[:,0] <- column stack
+ax[0].plot(log_Y, log_Y, label='y=y_pred') # prefect regression prediction line
+ax[0].set_ylabel('Log10(EW Blue_Obs)')
+ax[0].set_xlabel('Predicted Log10(EW Blue_Obs)')
 ax[0].set_title('Linear regression model for blue EW python data')
 ax[0].legend()
-# colour maps to run numbers
-temp = np.delete(grid_length, nan_values)
-target = ax[1].scatter(log_Y[:,0], predicted_log_Y[:,0], c=temp, cmap='rainbow')
+
+# same plot but colour maps to run numbers
+temp = np.delete(grid_length, nan_values) # for colour bar
+target = ax[1].scatter(predicted_log_Y[:,0], log_Y[:,0], c=temp, cmap='rainbow')
 plt.colorbar(target, ax=ax[1], label='Grid Length')
-ax[1].plot(log_Y, log_Y, label='y=y_pred')
-ax[1].set_xlabel('Log10 EW Blue Obs')
-ax[1].set_ylabel('Predicted Log10 EW Blue Obs')
+ax[1].plot(log_Y, log_Y, label='y=y_pred') # prefect regression prediction line
+ax[1].set_ylabel('Log10(EW Blue_Obs)')
+ax[1].set_xlabel('Predicted Log10(EW Blue_Obs)')
 ax[1].legend()
 plt.savefig(f'{folder_name}/blue_EW_data_vs_predicted_inc_{incs[inclination_column]}.png', dpi=300)
 plt.show()
 
-# plt.scatter(log_Y[:,0], predicted_log_Y[:,0], color='blue')
-# plt.plot(log_Y, log_Y)
-# plt.xlabel('Log10 EW Blue Obs')
-# plt.ylabel('Predicted Log10 EW Blue Obs')
-# plt.title('Linear regression model for blue EW python data')
-# plt.show()
+# if column stack blue and red seperate
 fig2, ax2 = plt.subplots(1,2, figsize=(10,5))
-ax2[0].scatter(log_Y[:,1], predicted_log_Y[:,1], color='red')
+ax2[0].scatter(predicted_log_Y[:,1], log_Y[:,1], color='red')
 ax2[0].plot(log_Y, log_Y, label='y=y_pred')
-ax2[0].set_xlabel('Log10 EW Red Obs')
-ax2[0].set_ylabel('Predicted Log10 EW Red Obs')
+ax2[0].set_ylabel('Log10(EW Red_Obs)')
+ax2[0].set_xlabel('Predicted Log10(EW Red_Obs)')
 ax2[0].set_title('Linear regression model for red EW python data')
 ax2[0].legend()
 # colour maps to run numbers
 temp2 = np.delete(grid_length, nan_values)
-target2 = ax2[1].scatter(log_Y[:,1], predicted_log_Y[:,1], c=temp2, cmap='rainbow')
+target2 = ax2[1].scatter(predicted_log_Y[:,1], log_Y[:,1], c=temp2, cmap='rainbow')
 plt.colorbar(target2, ax=ax2[1], label='Grid Length')
 ax2[1].plot(log_Y, log_Y, label='y=y_pred')
-ax2[1].set_xlabel('Log10 EW Red Obs')
-ax2[1].set_ylabel('Predicted Log10 EW Red Obs')
+ax2[1].set_ylabel('Log10(EW Red_Obs)')
+ax2[1].set_xlabel('Predicted Log10(EW Red_Obs)')
 ax2[1].legend()
 plt.savefig(f'{folder_name}/red_EW_data_vs_predicted_inc_{incs[inclination_column]}.png', dpi=300)
 plt.show()
 
+# %%
+################################################################################
+print('TRENDS: LINEAR REGRESSION OF THE WHOLE EW LINE VS SIMULATION PARAMETERS')
+################################################################################
 
-# plt.scatter(log_Y[:,1], predicted_log_Y[:,1], color='red')
-# plt.plot(log_Y, log_Y)
-# plt.xlabel('Log10 EW Red Obs')
-# plt.ylabel('Predicted Log10 EW Red Obs')
-# plt.title('Linear regression model for red EW python data')
-# plt.show()
+#log_Y_test = [ew_data_blue[i]+ew_data_red[i] for i,_ in enumerate(ew_data_red)] # differs from re-intergrating all wavelengths EW 
+# use this below ew_data_all
+ew_data_all = [equivalent_width(final_results['wavelength_grid'][run],
+                                final_results['grid'][run],
+                                final_results['sk_con_data'][run], 
+                                'all') for run in range(len(final_results['grid']))]
+ew_data_all_copy = ew_data_all.copy() # for use later in script
+negative_runs_all = [i for i, val in enumerate(ew_data_all) if val <= 0]
+ew_data_all = np.delete(ew_data_all, negative_runs_all)
+#grid_length_all = np.delete(grid_length, np.arange(0,728))
 
-# plt.scatter(log_Y[:,2], predicted_log_Y[:,2], color='darkblue')
-# plt.plot(log_Y, log_Y)
-# plt.xlabel('Log10 EW Blue Fit')
-# plt.ylabel('Predicted Log10 EW Blue Fit')
-# plt.title('Linear regression model for blue EW model fit data')
-# plt.show()
+log_Y_all = np.log10(ew_data_all)
 
-# plt.scatter(log_Y[:,3], predicted_log_Y[:,3], color='darkred')
-# plt.plot(log_Y, log_Y)
-# plt.xlabel('Log10 EW Red Fit')
-# plt.ylabel('Predicted Log10 EW Red Fit')
-# plt.title('Linear regression model for red EW model fit data')
-# plt.show()
+# removing potentially negative EWs
+# nan_values_all = np.argwhere(np.isnan(log_Y_all))
+# log_Y_all = np.delete(log_Y_all, nan_values_all, axis=0)
+
+# only log10 the 0th, 1st, 2nd, and 4th columns. keep the rest the same
+X = parameter_table[:,1:] # cut_parameter_table
+X_copy = X.copy() # for use later in script
+X = np.delete(X, negative_runs_all, axis=0)
+log_X_all = np.column_stack((np.log10(X[:,0]),
+                             np.log10(X[:,1]),
+                             np.log10(X[:,2]),
+                             X[:,3],
+                             np.log10(X[:,4]), 
+                             X[:,5]
+                             ))
+# log_X_all = np.delete(log_X_all, nan_values_all, axis=0)
+
+model_all = LinearRegression()
+model_all.fit(log_X_all, log_Y_all)
+
+print(f'R^2 Score: {model_all.score(log_X_all, log_Y_all)}')
+print('Model fitting equation:')
+display(Math(r'log(EW) = alog(p1) + blog(p2) + clog(p3) + d * p4 + elog(p5) + f * p6 + g'))
+
+print('Linear Regression model for the entire EW line') # in LaTeX style
+
+eqn_all = f'log(EW) = {model_all.coef_[0]:.3f}log({sim_parameters[0]}) + {model_all.coef_[1]:.3f}log({sim_parameters[1]}) + {model_all.coef_[2]:.3f}log({sim_parameters[2]}) + {model_all.coef_[3]:.3f}{sim_parameters[3]} + {model_all.coef_[4]:.3f}log({sim_parameters[4]}) + {model_all.coef_[5]:.3f}{sim_parameters[5]} + {model_all.intercept_:.3f}$'
+display(Math(f'{eqn_all}')) # Latex formatted string to LaTeX output
+
+predicted_log_Y_all = model_all.predict(log_X_all)
+
+fig, ax = plt.subplots(1,2, figsize=(10,5))
+ax[0].scatter(predicted_log_Y_all, log_Y_all, color='black')
+ax[0].plot(log_Y_all, log_Y_all, label='y=y_pred')
+ax[0].set_ylabel('Log10(EW All_Obs)')
+ax[0].set_xlabel('Predicted Log10(EW All_Obs)')
+ax[0].set_title('Linear regression model for entire line EW python data')
+ax[0].legend()
+
+# colour maps to run numbers
+temp = np.delete(np.arange(0,729), negative_runs_all)
+target = ax[1].scatter(predicted_log_Y_all, log_Y_all, c=temp, cmap='rainbow')
+plt.colorbar(target, ax=ax[1], label='Grid Length')
+ax[1].plot(log_Y_all, log_Y_all, label='y=y_pred')
+ax[1].set_ylabel('Log10(EW All_Obs)')
+ax[1].set_xlabel('Predicted Log10(EW All_Obs)')
+ax[1].legend()
+plt.savefig(f'{folder_name}/all_EW_data_vs_predicted_inc_{incs[inclination_column]}.png', dpi=300)
+plt.show()
+
+#cross validation
+scores = cross_val_score(model_all, log_X_all, log_Y_all, cv=5, n_jobs=5)
+print(f'Cross validated R^2 score: {scores}')
+
 
 # %%
-# FEATURE RANKING THE PARAMETERS
-from sklearn.feature_selection import RFE
+################################################################################
+print('TRENDS: NEURAL NETWORK REGRESSION VS SIMULATION PARAMETERS')
+################################################################################
+
+# To double check, the linear regression is work as expected and there is some
+# improvements we could do. 
+
+log_X_train, log_X_test, log_Y_train, log_Y_test = train_test_split(log_X_all, log_Y_all, test_size=0.4)
+
+regr = MLPRegressor(hidden_layer_sizes=(100,),max_iter=5000).fit(log_X_train, log_Y_train)
+y_pred = regr.predict(log_X_test)
+
+#calculating an R^2 score
+print(f'R^2 Score: {regr.score(log_X_test, log_Y_test)}')
+print(f'Number of Layers = {regr.n_layers_}, Number of Outputs = {regr.n_outputs_}')
+print('Neural Network Settings:')
+print(regr.get_params())
+
+# plot the loss curve
+plt.plot(regr.loss_curve_)
+plt.xlabel('Iterations')
+plt.ylabel('Loss')
+plt.title('Loss Curve for Neural Network')
+plt.show()
+
+# plotting the predicted log_Y values against the actual log_Y values
+plt.scatter(y_pred, log_Y_test, color='black')
+plt.plot(log_Y_all, log_Y_all, label='y=y_pred')
+plt.ylabel('Log10(EW All_Obs)')
+plt.xlabel('Predicted Log10(EW All_Obs)')
+plt.title('Neural Network regression model for entire line EW python data')
+plt.legend(title=f'data_points = {len(log_Y_test)}')
+plt.savefig(f'{folder_name}/all_EW_data_vs_predicted_NN_inc_{incs[inclination_column]}.png', dpi=300)
+plt.show()
+
+# cross validate the R^2 score
+scores = cross_val_score(regr, log_X_all, log_Y_all, cv=5, n_jobs=5)
+print(f'Cross validated R^2 score: {scores}')
+
+# cross_val_predict - performs the regression train 5 times for the 5 different
+# cross validation splits. This allows every data point to be a predicted EW
+# and plots the whole data set minus negative EWs. 
+predicted = cross_val_predict(regr, log_X_all, log_Y_all, cv=5, n_jobs=5)
+plt.scatter(predicted, log_Y_all, color='black')
+plt.plot(log_Y_all, log_Y_all, label='y=y_pred')
+plt.ylabel('Log10(EW All_Obs)')
+plt.xlabel('Predicted Log10(EW All_Obs)')
+plt.title('Neural Network regression model for entire line EW python data')
+plt.legend(title=f'data_points = {len(log_Y_all)}, cross validated')
+plt.show()
+
+# %%
+################################################################################
+print('TRENDS: EW VS SIMULATION PARAMETERS CORRELATION MATRIX')
+################################################################################
+# Scaled or not seems to make no difference to the end result
+
+X_cut_plus = np.delete(X_copy, negative_runs, axis=0)
+ew_data_all_cut_plus = np.delete(ew_data_all_copy, negative_runs)
+parameter_and_ew_data = np.column_stack((X_cut_plus, 
+                                         ew_data_blue, 
+                                         ew_data_red, 
+                                         ew_data_all_cut_plus
+                                         ))
+feature_names = sim_parameters + ['Blue EW', 'Red EW', 'All EW']
+
+scaler = StandardScaler()
+scaled_data = scaler.fit_transform(parameter_and_ew_data)
+matrix_for_corr = pd.DataFrame(scaled_data, columns=feature_names)
+
+corr = matrix_for_corr.corr(method='spearman')
+corr = corr.loc[['Blue EW', 'Red EW', 'All EW'], :]
+
+ax = plt.axes()
+im = ax.imshow(corr, cmap='bwr', vmin=-1, vmax=1)
+ax.set_xticks(np.arange(len(corr.columns)))
+ax.set_yticks(np.arange(3))
+ax.set_xticklabels(corr.columns, rotation=90)
+ax.set_yticklabels(['Blue EW', 'Red EW', 'All EW'])
+ax.grid(False)
+plt.colorbar(im)
+plt.title(f'Spearman Correlation Matrix of EWs at {incs[inclination_column]}°')
+plt.show()
+
+display(corr)
+
+# %%
+################################################################################
+print('TRENDS: FEATURE RANKING THE PARAMETERS FROM THE LINEAR REGRESSION MODEL')
+################################################################################
+# Feature ranking using Recursive Feature Elimination (RFE) to determine
+# the most important features.This is done by recursively removing the least
+# important features until the desired number of features is reached.
 
 model = LinearRegression()
 rfe = RFE(model, n_features_to_select=1)
-rfe.fit(log_X, log_Y)
-rfe_predicted = rfe.predict(log_X)
+rfe.fit(log_X_all, log_Y_all)
+rfe_predicted = rfe.predict(log_X_all)
 
 # only the selected features that are true
-selected_features = [param for param, support in zip(sim_parameters, rfe.support_) if support]
 ranking = rfe.ranking_
 
-print('Selected Features:', selected_features)
-print('Feature Ranking:', ranking)
+# print the features in order of their ranking
+print('Feature ranking for the parameters:')
+for rank, feature in zip(ranking, sim_parameters):
+    latex_style = f'Rank {rank}: {feature}'
+    display(Math(latex_style))  # Latex formatted string to LaTeX output
 
-# %%
-# Splitting the data into training and testing sets, checking for overfitting
-log_X_train, log_X_test, log_Y_train, log_Y_test = train_test_split(log_X, log_Y, test_size=0.2, random_state=0)
-
-model = LinearRegression()
-model.fit(log_X_train, log_Y_train)
 
 # %%
 ################################################################################
