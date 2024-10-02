@@ -26,7 +26,7 @@
 
 # TODO Sklearn seems to be fitting better. Should use, but not enough of a difference
 # atm to warrant changing the code. Will continue finding trends for now.
-# %%
+# %% 1
 ################################################################################
 print('STEP 1: IMPORTING MODULES')
 ################################################################################
@@ -48,17 +48,17 @@ import itertools
 plt.style.use('Solarize_Light2')
 script_ran_once = False
 
-# %%
+# %% 2
 ################################################################################
 print('STEP 2: LOADING DATA AND BUILDING GRID')
 ################################################################################
 
-path_to_grid = '../Grids/Mixed_Ha_grid_spec_files/'
+path_to_grid = '../Release_Ha_grid_spec_files/'
 files = os.listdir(path_to_grid) # list of files in directory
 
 # -------INPUTS-------- #
 wavelength_range = (6435, 6685) # set desired wavelength range, start with the narrowest range
-inclination_column = 14 # 10-14 = 20,45,60,72.5,85
+inclination_column = 10 # 10-14 = 20,45,60,72.5,85
 grid_mixed = True # if grid is mixed, set to True to rerun the script at difference wavelength ranges
                   # you can change the wavelength range in the second input below.
 # --------------------- #
@@ -100,13 +100,13 @@ for i in range(len(sorted_files)):
     wave = np.loadtxt(sorted_files[i], usecols=1, skiprows=81)[::-1] # wavelength values for each file
     wavelength_grid[i] = wave[wave_mask] # adding wavelengths into the grid
 
-# %%
+# %% 3
 ################################################################################
 print('STEP 3: SKLEARN FITTING THE CONTINUUM ONLY, NOISE ERROR CALCULATED')
 ################################################################################
 
 
-def continuum(wavelengths, spectrum):
+def continuum(wavelengths, spectrum, intervals=(6220, 6480, 6600, 6900)):
     """ Function to determine the underlying continuum and noise of a spectrum.
 
     Args:
@@ -121,7 +121,7 @@ def continuum(wavelengths, spectrum):
     """
 
     # Continuum portion of the spectrum. Removing the emission lines
-    intervals = (6220, 6480, 6600, 6900) # wavelength intervals for continuum
+    #intervals = (6220, 6480, 6600, 6900) # wavelength intervals for continuum
     con_wave_mask_low = (wavelengths > intervals[0]) & (wavelengths < intervals[1])
     con_wave_mask_high = ((wavelengths > intervals[2]) & (wavelengths < intervals[3]))
     con_mask = con_wave_mask_low | con_wave_mask_high # mask only for continuum wavelength range
@@ -140,8 +140,12 @@ sk_con_data = np.array([]) # a continuum fit excluding peak features
 sk_slopes = np.array([]) # the gradient of the linear fit
 sk_intercepts = np.array([]) # the y-intercept of the linear fit
 sk_noise_error = np.array([]) # the standard deviation of the noise excluding the peak features
+if not script_ran_once:
+    intervals = (6450,6475,6625,6650) # wavelength intervals for continuum
+elif script_ran_once:
+    intervals = (6300, 6325, 6775, 6800) # wavelength intervals for continuum
 for i in range(len(grid)): # Iterating through grid
-    con, m, c, noise = continuum(wavelengths, grid[i])
+    con, m, c, noise = continuum(wavelengths, grid[i], intervals)
     sk_con_data = np.append(sk_con_data, con)
     sk_slopes = np.append(sk_slopes, m)
     sk_intercepts = np.append(sk_intercepts, c)
@@ -149,7 +153,7 @@ for i in range(len(grid)): # Iterating through grid
     
 sk_con_data = sk_con_data.reshape(len(grid), len(wavelengths)) # append method back to grid shape
 
-# %%
+# %% 4
 ################################################################################
 print('STEP 4: RESAMPLING THE GRID DATA FROM NOISE ERROR FUNCTION')
 ################################################################################
@@ -175,7 +179,7 @@ def resample_data(wavelengths, grid_data, noise_error):
     resampled = resampled.reshape(len(grid_data), len(wavelengths)) # append method back to grid shape
     return resampled
 
-# %%
+# %% 5
 ################################################################################
 print('STEP 5: FITTING THE GAUSSIAN WITH CONTINUUM TO THE DATA FUNCTION')
 ################################################################################
@@ -287,7 +291,7 @@ def fit_data(wavelengths, grid):
 parameter_names = ['Amplitude', 'Mean', 'Sigma', 'Slope', 'Intercept']
 H_alpha = 6562.819 #4861.333	 # 6562.819 # Emission line we are fitting
 
-# %% 
+# %% 6
 ################################################################################
 print('STEP 6: CALCULATING THE EQUIVALENT WIDTH EXCESSES')
 ################################################################################
@@ -394,8 +398,8 @@ print(f'Blue: {blue_wavelengths[0]}-{blue_wavelengths[-1]}Å  Red: {red_waveleng
 
 # -------INPUTS-------- #
 # Be sensible with intervals or you'll break code. (near peak first, far peak second)
-blue_peak_mask = (0,90) # number of angstroms to cut around the peak, blue minus.
-red_peak_mask = (0,90) # number of angstroms to cut around the peak, red plus.
+blue_peak_mask = (22,90) # number of angstroms to cut around the peak, blue minus.
+red_peak_mask = (22,90) # number of angstroms to cut around the peak, red plus.
 # --------------------- #
 
 # Calculating the equivalent width excess data points for the PYTHON Grid
@@ -406,14 +410,18 @@ red_ew_excess = equivalent_width_excess(wavelengths, grid, fitted_grid, fit_con,
 # Calculating the equivalent width excess errors from resampling grid
 resampled_blue_ew_excess = np.array([])
 resampled_red_ew_excess = np.array([])
+resampled_grids = np.array([]) # to store grid for EW calculations later
 samples = 150
 for sample in tqdm(range(samples)):
     resampled_grid = resample_data(wavelengths, grid, sk_noise_error) # resampled grid
+    resampled_grids = np.append(resampled_grids, resampled_grid)
     fitted_grid, fit_con, fit_parameters, initials_all, _, _ = fit_procedure(wavelengths, resampled_grid)
     blue = equivalent_width_excess(wavelengths, resampled_grid, fitted_grid, fit_con, shift='blue', peak_mask=blue_peak_mask)
     red = equivalent_width_excess(wavelengths, resampled_grid, fitted_grid, fit_con, shift='red', peak_mask=red_peak_mask)
     resampled_blue_ew_excess = np.append(resampled_blue_ew_excess, blue)
     resampled_red_ew_excess = np.append(resampled_red_ew_excess, red)
+#resampled grid shape is 150 * (run_number x number of wavelengths)
+resampled_grids = resampled_grids.reshape(samples, len(grid), len(wavelengths))
 resampled_blue_ew_excess = resampled_blue_ew_excess.reshape(samples, len(grid))
 resampled_red_ew_excess = resampled_red_ew_excess.reshape(samples, len(grid))
 blue_ew_excess_error = np.std(resampled_blue_ew_excess, axis=0)
@@ -428,7 +436,7 @@ if grid_mixed and not script_ran_once:
 if grid_mixed and script_ran_once:
     print("You've ran the mixed grid, run step 8 to mix the data.")
 
-# %%
+# %% TOOL
 ################################################################################
 print('TOOL: ANIMATED PLOTTING')
 ################################################################################
@@ -516,7 +524,7 @@ if i_want_to_view_the_fits:
 else:
     print('We skipped using this tool, set to True if incorrect.')
 
-# %%
+# %% 7
 ################################################################################
 print("STEP 7: ARE YOU RUNNING A MIXED WAVELENGTH RANGED GRID?")
 ################################################################################
@@ -545,7 +553,8 @@ if grid_mixed and not script_ran_once:
                          'sk_slopes': sk_slopes.tolist(),
                         'sk_intercepts': sk_intercepts.tolist(),
                         'sk_noise_error': sk_noise_error.tolist(),
-                        'run_number': run_number.tolist()
+                        'run_number': run_number.tolist(),
+                        'resampled_grids': resampled_grids.tolist(),
                       }
 
     script_ran_once = True
@@ -567,11 +576,12 @@ if not grid_mixed:
                         'sk_slopes': sk_slopes.tolist(),
                         'sk_intercepts': sk_intercepts.tolist(),
                         'sk_noise_error': sk_noise_error.tolist(),
-                        'run_number': grid_length.tolist()
+                        'run_number': grid_length.tolist(),
+                        'resampled_grids': resampled_grids.tolist(),
                         }
     print("You can skip Step 8 and move onto Step 9")
  
-# %%
+# %% 8
 ################################################################################
 print("STEP 8: MERGE MIXED GRID WITH THE REST OF THE GRID")
 ################################################################################  
@@ -596,7 +606,8 @@ if grid_mixed and script_ran_once:
                         'sk_slopes': sk_slopes.tolist(),
                         'sk_intercepts': sk_intercepts.tolist(),
                         'sk_noise_error': sk_noise_error.tolist(),
-                        'run_number': mixed_runs
+                        'run_number': mixed_runs,
+                        'resampled_grids': resampled_grids.tolist(), #(150, (685, 500))
                         }
     
     # Combining any previous results together, use final_results dictionary
@@ -607,14 +618,27 @@ if grid_mixed and script_ran_once:
         if run in stored_results['run_number']:
             index = stored_results['run_number'].index(run)
             for key in final_results:
-                final_results[key].append(stored_results[key][index])        
+                if key != 'resampled_grids':
+                    final_results[key].append(stored_results[key][index])
         elif run in mixed_runs:
             index = mixed_results['run_number'].index(run)
             for key in final_results:
-                final_results[key].append(mixed_results[key][index])
+                if key != 'resampled_grids':                
+                    final_results[key].append(mixed_results[key][index])
             
-
-# %%
+# different structure for the resampled grids (samples, (run_number, wavelengths))
+# it's horrendous to read/code, im sorry, but it works.
+final_results['resampled_grids'] = [[] for _ in range(samples)]
+for sample in range(samples):
+    for run in grid_length:
+        if run in stored_results['run_number']:
+            index = stored_results['run_number'].index(run)
+            final_results['resampled_grids'][sample].append(stored_results['resampled_grids'][sample][index])
+        elif run in mixed_runs:
+            index = mixed_results['run_number'].index(run)
+            final_results['resampled_grids'][sample].append(mixed_results['resampled_grids'][sample][index])
+            
+# %% 9
 ################################################################################
 print("STEP 9: PLOTTING THE EW EXCESSES FOR ALL RUNS AGAINST TEO'S DATA")
 ################################################################################
@@ -622,13 +646,13 @@ print("STEP 9: PLOTTING THE EW EXCESSES FOR ALL RUNS AGAINST TEO'S DATA")
 # EVERY RUN IS PLOTTED HERE FOR THE EQUIVALENT WIDTH EXCESSES, NO BAD FITS REMOVED
 # YOU CAN POTENTIALLY SKIP THIS STEP IF YOU WANT TO REMOVE BAD FITS STRAIGHT AWAY.
 
-%matplotlib qt
+%matplotlib inline
 
 # loading Teo's data from csv files
-bz_cam = np.loadtxt('Teo_data/BZ Cam.csv', delimiter=',') 
-mv_lyr = np.loadtxt('Teo_data/MV Lyr.csv', delimiter=',')
-v425_cas = np.loadtxt('Teo_data/V425 Cas.csv', delimiter=',')
-v751_cyg = np.loadtxt('Teo_data/V751 Cyg.csv', delimiter=',')
+bz_cam = np.loadtxt('Cuneo_2023_data/BZ Cam.csv', delimiter=',') 
+mv_lyr = np.loadtxt('Cuneo_2023_data/MV Lyr.csv', delimiter=',')
+v425_cas = np.loadtxt('Cuneo_2023_data/V425 Cas.csv', delimiter=',')
+v751_cyg = np.loadtxt('Cuneo_2023_data/V751 Cyg.csv', delimiter=',')
 
 # plot concentric circles of a given radius
 def circle(radius):
@@ -676,7 +700,7 @@ plt.ylim(min(final_results['blue_ew_excess'])-2,max(final_results['blue_ew_exces
 plt.legend()
 plt.show()
 
-# %%
+# %% 10
 ################################################################################
 print('STEP 10: CUTTING POOR DATA FITS LIKE BIMODAL EMISSION LINES OR NO VISIBLE EMISSION LINES')
 ################################################################################
@@ -825,7 +849,8 @@ for i in range(len(removed_runs)):
 cut_runs = np.append(cut_runs, cut_runs_2) # adding high error runs to flat runs
 cut_runs = np.unique(cut_runs) # removing duplicates
 
-# %%
+# TODO Cut out runs where gaussian continuum very different to sklearn continuum
+# %% 11
 ################################################################################
 print('STEP 11: REPLOTTING THE EW EXCESSES WITHOUT THE CUT RUNS')
 ################################################################################
@@ -835,6 +860,28 @@ print('STEP 11: REPLOTTING THE EW EXCESSES WITHOUT THE CUT RUNS')
 incs = [0 for i in range(10)] # to indent incs to the same column index as files
 [incs.append(i) for i in [20,45,60,72.5,85]] # inclinations from PYTHON models
 
+path_to_table = '../Grids/Wider_Ha_grid_spec_files/Grid_runs_full_table.txt'
+ascii_table = np.genfromtxt(f'{path_to_table}',
+                    delimiter='|',
+                    skip_header=3,
+                    skip_footer=1,
+                    dtype=float
+                    )
+
+# removing nan column due to pretty table
+ascii_table = np.delete(ascii_table, 0, 1) # array, index position, axis
+parameter_table = np.delete(ascii_table, -1, 1)
+
+sim_parameters = [r'$\dot{M}_{disk}$',
+        r'$\dot{M}_{wind}$',
+        r'$KWD.d$',
+        r'$r_{exp}$',
+        r'$acc_{length}$',
+        r'$acc_{exp}$'
+        ] # PYTHON Parameters
+# remove the first column of parameter_table
+parameter_table = np.delete(parameter_table, 0, 1)
+
 # removing bad and flat fits from the data for the final plot of the EW excesses
 cut_red_ew_excess = np.delete(final_results['red_ew_excess'], cut_runs)
 cut_blue_ew_excess = np.delete(final_results['blue_ew_excess'], cut_runs)
@@ -843,17 +890,12 @@ cut_blue_ew_excess_error = np.delete(final_results['blue_ew_excess_error'], cut_
 #cut_sk_con_data = np.delete(final_results['sk_con_data'], cut_runs)
 cut_grid = [i for j, i in enumerate(final_results['grid']) if j not in cut_runs]
 cut_grid_length = np.delete(grid_length, cut_runs)
-cut_frms_data = np.delete(frms_data, cut_runs)
-cut_rms_data = np.delete(rms_data, cut_runs)
-cut_chi_2_data = np.delete(chi_2_data, cut_runs)
-cut_rss_data = np.delete(rss_data, cut_runs)
-
 
 # Loading Teo's data from csv files
-bz_cam = np.loadtxt('Teo_data/BZ Cam.csv', delimiter=',') 
-mv_lyr = np.loadtxt('Teo_data/MV Lyr.csv', delimiter=',')
-v425_cas = np.loadtxt('Teo_data/V425 Cas.csv', delimiter=',')
-v751_cyg = np.loadtxt('Teo_data/V751 Cyg.csv', delimiter=',')
+bz_cam = np.loadtxt('Cuneo_2023_data/BZ Cam.csv', delimiter=',') 
+mv_lyr = np.loadtxt('Cuneo_2023_data/MV Lyr.csv', delimiter=',')
+v425_cas = np.loadtxt('Cuneo_2023_data/V425 Cas.csv', delimiter=',')
+v751_cyg = np.loadtxt('Cuneo_2023_data/V751 Cyg.csv', delimiter=',')
 
 # Animation for the EW excess plots showing the data for particular runs and 
 # the fit to data to produce than run's EW excess.
@@ -896,7 +938,10 @@ def slider_update(val):
         f'$chi^2$ = {chi_2_data[int(val)]:.2e}',
         f'RSS = {rss_data[int(val)]:.2e}'))
     props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
-    ax[1].text(0.9, 0.9, textstr, transform=ax[1].transAxes, fontsize=14,
+    ax[1].text(0.9, 0.95, textstr, transform=ax[1].transAxes, fontsize=14,
+        verticalalignment='top', bbox=props)
+    paramstr = '\n'.join([f'{sim_parameters[i]} = {parameter_table[int(val),i]:.2e}' for i in range(6)])
+    ax[1].text(0.9, 0.8, paramstr, transform=ax[1].transAxes, fontsize=14,
         verticalalignment='top', bbox=props)
     
     # ax2 is plotting an individual EW excess point for a particular run
@@ -989,6 +1034,12 @@ def init_plot():
     # plot formatting
     ax[0].set_xlabel('Red Wing EW Excess ($Å$)')
     ax[0].set_ylabel('Blue Wing EW Excess ($Å$)')
+    #plot y=x line
+    ax[0].plot(np.linspace(-10,10,100), np.linspace(-10,10,100), color='black', linestyle='--', alpha=0.5)
+    #plot y=-x line
+    ax[0].plot(np.linspace(-10,10,100), -np.linspace(-10,10,100), color='black', linestyle='--', alpha=0.5)
+    
+    
     ax[0].set_title(f'Inc {incs[inclination_column]}° \n Red vs Blue Wing EW Excesses')
     
     ax[0].axvline(x=0, color='black', linestyle='--', alpha=0.5, zorder = 1)
@@ -1028,7 +1079,7 @@ def init_plot():
     ax[1].legend()
     
     # Add text to the top left of the ax[0] plot
-    ax[0].text(xlim[0]-2.5, ylim[1]+0.8, 'Reverse\nP-Cygni?', fontsize=12, color='black', fontweight='bold')
+    ax[0].text(xlim[0]-2.5, ylim[1]+0.8, 'Inverse\nP-Cygni?', fontsize=12, color='black', fontweight='bold')
     ax[0].text(xlim[0]-2.5, ylim[0]-1.5, 'Broad Absorption\nWings?', fontsize=12, color='black', fontweight='bold')
     ax[0].text(xlim[1]-1, ylim[1]+0.8, 'Broad Emission\nWings?', fontsize=12, color='black', fontweight='bold')
     ax[0].text(xlim[1]-1, ylim[0]-1.5, 'P-Cygni?', fontsize=12, color='black', fontweight='bold')
@@ -1062,7 +1113,7 @@ anim = FuncAnimation(fig,
                      ) # setting up animation
 anim.running = True # setting off animation
 
-# %%
+# %% 12 TRENDS
 ################################################################################
 print('STEP 12: FINDING TRENDS IN THE DATA')
 ################################################################################
@@ -1071,12 +1122,14 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.linear_model import LinearRegression
 from sklearn.linear_model import Ridge
+from sklearn.linear_model import Lasso
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import cross_val_score
 from sklearn.model_selection import cross_val_predict
 from sklearn.feature_selection import RFE
 from sklearn.neural_network import MLPRegressor
 from IPython.display import display, Math, Latex, Markdown
+import statsmodels.api as sm
 import scipy.stats as stats
 import pandas as pd
 import datetime
@@ -1091,11 +1144,15 @@ scatterplots = f'{folder_name}/scatter_plots'
 if not os.path.exists(folder_name):
     os.makedirs(folder_name)
     os.makedirs(scatterplots)
-
+    
+# TODO Remove parameter dependencies. Something in trends section
+# is changing grid_length which affects the PYTHON plotting tool
+# %% Excess Cornerplot
 ################################################################################
 print('TRENDS: EW EXCESSES VS SIMULATION PARAMETERS CORNERPLOT')
 ################################################################################
 %matplotlib inline
+# TODO plot scatter plots on a cornerplot figure
 
 # importing the run parameter combinations
 # Loading run files parameter combinations from pretty table file
@@ -1250,7 +1307,7 @@ def red_2d():
 blue_3d()
 red_2d()
 
-# %%
+# %% Excess Corr Matrix
 ################################################################################
 print('TRENDS: EW EXCESSES VS SIMULATION PARAMETERS CORRELATION MATRIX')
 ################################################################################
@@ -1288,7 +1345,7 @@ plt.show()
 
 display(corr) # display correlation matrix values in a table
 
-# %%
+# %% PCA
 ################################################################################
 print('TRENDS: PCA ON THE DATA? (CAN SKIP)')
 ################################################################################
@@ -1306,7 +1363,7 @@ plt.title('Explained Variance Ratio of PCA')
 plt.savefig(f'{folder_name}/PCA_explained_variance_ratio_inc_{incs[inclination_column]}.png', dpi=300)
 plt.show()
 
-# %%
+# %% Scatterplots
 ################################################################################
 print('TRENDS: SCATTERPLOTS DISTRIBUTION OF THE DATA WITH A GIVEN PARAMETER')
 ################################################################################
@@ -1371,7 +1428,7 @@ for j in range(0,6):
         plt.show()
 
 
-# %%
+# %% Excess 'weights' plot
 ################################################################################
 print('TRENDS: VIEWING THE EXCESS VALUES IN A 3D PLOT OF 3 CHOSEN PARAMETERS')
 ################################################################################
@@ -1543,7 +1600,7 @@ anim = FuncAnimation(fig,
                      ) # setting up animation
 anim.running = True # setting off animation
 
-# %%
+# %% Excess B/R LR
 ################################################################################
 print('TRENDS: LINEAR REGRESSION OF THE EW EXCESSES VS SIMULATION PARAMETERS')
 ################################################################################
@@ -1586,17 +1643,29 @@ print(f'R^2 score: {model.score(log_X, Y)}') # R^2 value
 print('Linear Regression model for Blue_ew_excess') # in LaTeX style
 
 # input variables into the string
-eqn_blue = f'y = {model.coef_[0][0]:.3f}{sim_parameters[0]} + {model.coef_[0][1]:.3f}{sim_parameters[1]} + {model.coef_[0][2]:.3f}{sim_parameters[2]} + {model.coef_[0][3]:.3f}{sim_parameters[3]} + {model.coef_[0][4]:.3f}{sim_parameters[4]} + {model.coef_[0][5]:.3f}{sim_parameters[5]} + {model.intercept_[0]:.3f}$'
+eqn_blue = f'y = log({model.coef_[0][0]:.3f}{sim_parameters[0]}) + log({model.coef_[0][1]:.3f}{sim_parameters[1]}) + log({model.coef_[0][2]:.3f}{sim_parameters[2]}) + {model.coef_[0][3]:.3f}{sim_parameters[3]} + log({model.coef_[0][4]:.3f}{sim_parameters[4]}) + {model.coef_[0][5]:.3f}{sim_parameters[5]} + {model.intercept_[0]:.3f}$'
 display(Math(f'{eqn_blue}')) # Latex formatted string to LaTeX output
 
 print('Linear Regression model for Red_ew_excess') # in LaTeX style
 
 # input variables into the string
-eqn_red = f'y = {model.coef_[1][0]:.3f}{sim_parameters[0]} + {model.coef_[1][1]:.3f}{sim_parameters[1]} + {model.coef_[1][2]:.3f}{sim_parameters[2]} + {model.coef_[1][3]:.3f}{sim_parameters[3]} + {model.coef_[1][4]:.3f}{sim_parameters[4]} + {model.coef_[1][5]:.3f}{sim_parameters[5]} + {model.intercept_[1]:.3f}$'
+eqn_red = f'y = log({model.coef_[1][0]:.3f}{sim_parameters[0]}) + log({model.coef_[1][1]:.3f}{sim_parameters[1]}) + log({model.coef_[1][2]:.3f}{sim_parameters[2]}) + {model.coef_[1][3]:.3f}{sim_parameters[3]} + log({model.coef_[1][4]:.3f}{sim_parameters[4]}) + {model.coef_[1][5]:.3f}{sim_parameters[5]} + {model.intercept_[1]:.3f}$'
 display(Math(f'{eqn_red}')) # Latex formatted string to LaTeX output
 
 y_pred_blue_excess = model.predict(log_X)[:,0]
 y_pred_red_excess = model.predict(log_X)[:,1]
+
+# Ordinary Least Squares (OLS) model blue
+ols_X = sm.add_constant(log_X) # add an intercept value to the X parameters
+ols = sm.OLS(Y[:,0], ols_X) # statsmodels OLS model
+ols_result = ols.fit() # fitting the model
+print(ols_result.summary()) # printing the summary of the model
+
+# Ordinary Least Squares (OLS) model red
+ols_X = sm.add_constant(log_X) # add an intercept value to the X parameters
+ols = sm.OLS(Y[:,1], ols_X) # statsmodels OLS model
+ols_result = ols.fit() # fitting the model
+print(ols_result.summary()) # printing the summary of the model
 
 # plotting the linear regression model
 fig, ax = plt.subplots(1, 2, figsize=(10, 5))
@@ -1617,7 +1686,7 @@ plt.savefig(f'{folder_name}/linear_regression_model_excesses.png', dpi=300)
 plt.show()
 
 
-# %%
+# %% Calc EWs
 ################################################################################
 print('TRENDS: CALCULATING EQUIVALENT WIDTHS OF THE LINES')
 ################################################################################
@@ -1740,11 +1809,12 @@ ew_fit_red = [equivalent_width(final_results['wavelength_grid'][run],
                                 final_results['fit_con'][run], 
                                 'red') for run in range(len(final_results['grid']))]
 
+grid_length_copy = grid_length.copy()
 cut_ew_data_blue = np.delete(ew_data_blue, cut_runs)
 cut_ew_fit_blue = np.delete(ew_fit_blue, cut_runs)
 cut_ew_data_red = np.delete(ew_data_red, cut_runs)
 cut_ew_fit_red = np.delete(ew_fit_red, cut_runs)
-cut_grid_length = np.delete(grid_length, cut_runs)
+cut_grid_length = np.delete(grid_length_copy, cut_runs)
 
 # cutting out the negative ew values as it'll prompt warming everywhere when log
 negative_runs_data = []
@@ -1829,7 +1899,7 @@ plt.tight_layout()
 plt.savefig(f'{folder_name}/red_EWs_model_vs_data_inc_{incs[inclination_column]}.png', dpi=300)
 plt.show()
 
-# %%
+# %% EW B vs R 
 ################################################################################
 print('TRENDS: PLOTTING RED EW VS BLUE EW FOR A GIVEN INCLINATION')
 ################################################################################
@@ -1857,25 +1927,27 @@ plt.savefig(f'{folder_name}/red_vs_blue_EWs_inc_{incs[inclination_column]}.png',
 plt.show()
 
 # Plot a diagnostic plot of the blue vs red EW in log space
-#TODO
 target2 = plt.scatter(np.log10(ew_data_red),
                       np.log10(ew_data_blue),
                       label='EWs',
                       c=grid_length,
                       cmap='rainbow'
                       )
+log_x = np.linspace(min(np.log10(ew_data_blue)), max(np.log10(ew_data_blue)), 200)
 plt.colorbar(target2, label='Grid Length')
-plt.plot(np.log10(x),np.log10(x), color='black', linestyle='--', alpha=0.3, label='y=x')
+plt.plot(log_x,log_x, color='black', linestyle='--', alpha=0.3, label='y=x')
 plt.xlabel('Log10(Red EW)')
 plt.ylabel('Log10(Blue EW)')
 plt.title(f'Log10 Red vs Blue EWs for inclination {incs[inclination_column]}°')
 plt.savefig(f'{folder_name}/log_red_vs_blue_EWs_inc_{incs[inclination_column]}.png', dpi=300)
 plt.show()
 
-# %%
+# %% EW B/R LR
 ################################################################################
 print('TRENDS: LINEAR REGRESSION OF THE EW PYTHON DATA VS SIMULATION PARAMETERS')
 ################################################################################
+# TODO Resample to get errors upon coefficients
+# Will need to refit the Sk_continuum for each for accurate fits. 
 
 # Simple linear regression of EW vs simulation parameters
 
@@ -1919,14 +1991,14 @@ log_combination_table = np.column_stack((np.log10(combination_table[:,0]),
                                          combination_table[:,5]))
 # print parameter names and combinations
 print('-- The Combination Table of PYTHON parameters --')
-tabel_labels = ['log10(mdot_disk)',
+table_labels = ['log10(mdot_disk)',
                 'log10(mdot_wind)',
                 'log10(kwd.d)',
                 'r_exp',
                 'log10(acc_length)',
                 'acc_exp'
                 ]
-combi_table_df = pd.DataFrame(log_combination_table, columns=tabel_labels)
+combi_table_df = pd.DataFrame(log_combination_table, columns=table_labels)
 display(combi_table_df)
 
 print('Linear Regression model for Blue EW python data') # in LaTeX style
@@ -1986,9 +2058,9 @@ ax2[1].legend()
 plt.savefig(f'{folder_name}/red_EW_data_vs_predicted_inc_{incs[inclination_column]}.png', dpi=300)
 plt.show()
 
-# %%
+# %% Calc EW Errors
 ################################################################################
-print('TRENDS: LINEAR REGRESSION OF THE WHOLE EW LINE VS SIMULATION PARAMETERS')
+print('TRENDS: USING THE RESAMPLED DATA TO DETERMINE ERRORS ON THE EW FITS')
 ################################################################################
 
 #log_Y_test = [ew_data_blue[i]+ew_data_red[i] for i,_ in enumerate(ew_data_red)] # differs from re-intergrating all wavelengths EW 
@@ -2000,14 +2072,36 @@ ew_data_all = [equivalent_width(final_results['wavelength_grid'][run],
 ew_data_all_copy = ew_data_all.copy() # for use later in script
 negative_runs_all = [i for i, val in enumerate(ew_data_all) if val <= 0]
 ew_data_all = np.delete(ew_data_all, negative_runs_all)
+grid_length_without_negative_runs = np.delete(np.arange(0,729), negative_runs_all)
+
+# Resampling the data to determine errors on the equivalent widths
+resampled_ew_data_all = []
+for sample in tqdm(range(samples)):
+    resampled_ew = [equivalent_width(final_results['wavelength_grid'][run],
+                                              final_results['resampled_grids'][sample][run],
+                                              final_results['sk_con_data'][run],
+                                              'all') for run in range(len(final_results['grid']))
+                                              ]
+    resampled_ew_data_all.append(resampled_ew)
+
+resampled_ew_data_all = np.array(resampled_ew_data_all)
+ew_data_all_error = np.std(resampled_ew_data_all, axis=0)
+ew_data_all_error = np.delete(ew_data_all_error, negative_runs_all)
 #grid_length_all = np.delete(grid_length, np.arange(0,728))
 
 log_Y_all = np.log10(ew_data_all)
+log_Y_all_error = (1/np.log(10))*(ew_data_all_error/ew_data_all)
 
 # removing potentially negative EWs
 # nan_values_all = np.argwhere(np.isnan(log_Y_all))
 # log_Y_all = np.delete(log_Y_all, nan_values_all, axis=0)
 
+# %% EW ALL LR
+################################################################################
+print('TRENDS: LINEAR REGRESSION OF THE WHOLE EW LINE VS SIMULATION PARAMETERS')
+################################################################################
+
+%matplotlib qt
 # only log10 the 0th, 1st, 2nd, and 4th columns. keep the rest the same
 X = parameter_table[:,1:] # cut_parameter_table
 X_copy = X.copy() # for use later in script
@@ -2022,9 +2116,9 @@ log_X_all = np.column_stack((np.log10(X[:,0]),
 # log_X_all = np.delete(log_X_all, nan_values_all, axis=0)
 
 model_all = LinearRegression()
-model_all.fit(log_X_all, log_Y_all)
+model_all.fit(log_X_all, log_Y_all)#, 1/log_Y_all_error) # 1/unc for weights from errors
 
-print(f'R^2 Score: {model_all.score(log_X_all, log_Y_all)}')
+print(f'R^2 Score: {model_all.score(log_X_all, log_Y_all)}')#, 1/log_Y_all_error)}')
 print('Model fitting equation:')
 display(Math(r'log(EW) = alog(p1) + blog(p2) + clog(p3) + d * p4 + elog(p5) + f * p6 + g'))
 
@@ -2035,14 +2129,80 @@ display(Math(f'{eqn_all}')) # Latex formatted string to LaTeX output
 
 predicted_log_Y_all = model_all.predict(log_X_all)
 
-fig, ax = plt.subplots(1,2, figsize=(10,5))
-ax[0].scatter(predicted_log_Y_all, log_Y_all, color='black')
+# Ordinary Least Squares (OLS) model
+ols_X = sm.add_constant(log_X_all) # add an intercept value to the X parameters
+ols = sm.OLS(log_Y_all, ols_X) # statsmodels OLS model
+ols_result = ols.fit() # fitting the model
+print(ols_result.summary()) # summary of the model (errors, coefficients, etc)
+
+# Weighted Least Squares (WLS) model
+wls = sm.WLS(log_Y_all, ols_X, weights=1/log_Y_all_error) # including y errors effect
+wls_result = wls.fit() # fitting the model
+print(wls_result.summary()) # summary of the model (errors, coefficients, etc)
+
+# print the intercept and coefficient values ols
+print(f'Intercept: {ols_result.params[0]}')
+print(f'Coefficients: {ols_result.params[1:]}')
+print(f'std_err: {ols_result.bse}')
+
+predicted_log_Y_all_ols = ols_result.predict(ols_X)
+
+# OLS error calculation using standard error of the coefficients
+predicted_log_Y_all_ols_err = []
+for i, _ in enumerate(ols_X):
+    x_err_plus_c = [ols_result.bse[j]*abs(ols_X[i][j]) for j in range(len(ols_X[i]))]
+    y_err = np.sqrt(np.sum(np.array(x_err_plus_c)**2))
+    predicted_log_Y_all_ols_err.append(y_err)
+
+predicted_log_Y_all_wls = wls_result.predict(ols_X)
+
+# WLS error calculation using standard error of the coefficients
+predicted_log_Y_all_wls_err = []
+for i, _ in enumerate(ols_X):
+    x_err_plus_c = [wls_result.bse[j]*abs(ols_X[i][j]) for j in range(len(ols_X[i]))]
+    y_err = np.sqrt(np.sum(np.array(x_err_plus_c)**2))
+    predicted_log_Y_all_wls_err.append(y_err)
+
+fig, ax = plt.subplots(1,3, figsize=(15,5))
+# SKlearn wls matches statsmodel wls
+#ax[0].scatter(predicted_log_Y_all, log_Y_all, color='green', label = 'sklearn wls', alpha=0.5)
+ax[0].errorbar(predicted_log_Y_all_ols, 
+               log_Y_all,
+               xerr=predicted_log_Y_all_ols_err,
+               yerr=log_Y_all_error,
+               fmt='none', 
+               ecolor='grey',
+               alpha=0.2,
+               zorder=-1
+)
+ax[0].scatter(predicted_log_Y_all_ols, log_Y_all, color='red', label = 'statsmodels ols', alpha = 0.5)
 ax[0].plot(log_Y_all, log_Y_all, label='y=y_pred')
-ax[0].set_ylabel('Log10(EW All_Obs)')
+ax[0].plot(log_Y_all+0.8, log_Y_all, label='y=y_pred-1', linestyle='--')
+ax[0].plot(log_Y_all-0.8, log_Y_all, label='y=y_pred+1', linestyle='--')
+ax[0].set_ylabel('Log10(EW All_Obs) -- TRUTH')
 ax[0].set_xlabel('Predicted Log10(EW All_Obs)')
-ax[0].set_title('Linear regression model for entire line EW python data')
+ax[0].set_title('OLS Linear regression model for \n entire line EW python data')
+ax[0].set_xlim(-2,4)
+ax[0].set_ylim(-4,3)
 ax[0].legend()
 
+ax[2].errorbar(predicted_log_Y_all_wls, 
+               log_Y_all,
+               xerr=predicted_log_Y_all_wls_err,
+               yerr=log_Y_all_error,
+               fmt='none', 
+               ecolor='grey',
+               alpha=0.2,
+               zorder=-1
+)
+ax[2].scatter(predicted_log_Y_all_wls, log_Y_all, color='blue', label = 'statsmodels wls', alpha = 0.5)
+ax[2].plot(log_Y_all, log_Y_all, label='y=y_pred')
+ax[2].set_ylabel('Log10(EW All_Obs) -- TRUTH')
+ax[2].set_xlabel('Predicted Log10(EW All_Obs)')
+ax[2].set_title('WLS Linear regression model for \n entire line EW python data')
+ax[2].set_xlim(-2,4)
+ax[2].set_ylim(-4,3)
+ax[2].legend()
 # colour maps to run numbers
 temp = np.delete(np.arange(0,729), negative_runs_all)
 target = ax[1].scatter(predicted_log_Y_all, log_Y_all, c=temp, cmap='rainbow')
@@ -2058,18 +2218,129 @@ plt.show()
 scores = cross_val_score(model_all, log_X_all, log_Y_all, cv=5, n_jobs=5)
 print(f'Cross validated R^2 score: {scores}')
 
+# TODO Difference between predicted and actual values correlates to EW_Excess?
+#finding outliers from model
+# parameter_table_copy = parameter_table.copy()
+# parameter_table_without_negative_runs = np.delete(parameter_table_copy, negative_runs_all, axis=0)
+count = []
+for i in range(len(predicted_log_Y_all_ols)):
+    if predicted_log_Y_all_ols[i] > log_Y_all[i]+0.8 or predicted_log_Y_all_ols[i] < log_Y_all[i]-0.8:
+        lower_line = predicted_log_Y_all_ols[i] - 0.8
+        upper_line = predicted_log_Y_all_ols[i] + 0.8
+        if log_Y_all[i] > upper_line:
+            count.append(grid_length_without_negative_runs[i])
+        # if log_Y_all[i] < lower_line:
+        #     #print(f'{log_Y_all[i]:.3f}, {predicted_log_Y_all_ols[i]:.3f}, {grid_length_without_negative_runs[i]}, {i}')
+        #     count.append(grid_length_without_negative_runs[i]) # poor indexes
+
+combination_list = [parameter_table[i] for i in count] # index to combination
+combination_list = np.delete(combination_list, 0, axis=1) # remove first column
+print(len(combination_list))
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.widgets import Button, Slider
+from matplotlib.animation import FuncAnimation
+%matplotlib qt
+
+def slider_update(val):
+    for i in range(6):
+        ax[i//2, i%2].clear()
+        ax[i//2, i%2].hist(combination_list[:,i], bins=50, color='orange')
+        xlabel = sim_parameters[i]
+        ax[i//2, i%2].set_xlabel(xlabel)
+        ax[i//2, i%2].set_ylabel('Frequency')
+        # highlight the bar on the plot for the specific combination val index
+        index = count.index(int(val))
+        ax[i//2, i%2].axvline(x=combination_list[int(index)][i], color='black', linestyle='--', alpha=0.5)
+        # set ylimit to 50
+        ax[i//2, i%2].set_ylim(0,len(count))
+
+    fig.suptitle(f'Parameter Histograms for poor EW fits \n Combination {int(val)}')
+    fig.canvas.draw_idle()
+
+def animation_setting_new_slider_value(frame):
+    if anim.running:
+        if grid_slider.val == max(count): # TODO size of grid
+            grid_slider.set_val(count[0])
+        else:
+            next_index = count.index(int(grid_slider.val)) + 1
+            grid_slider.set_val(count[next_index])
+            
+def play_pause(event):
+    if anim.running:
+        anim.running = False
+        slider_update(grid_slider.val)
+    else:
+        anim.running = True
+
+def left_button_func(_) -> None:
+    anim.running = False
+    back_one = count.index(int(grid_slider.val)) - 1
+    grid_slider.set_val(count[back_one])
+    slider_update(grid_slider.val)
+
+def right_button_func(_) -> None:
+    anim.running = False
+    forward_one = count.index(int(grid_slider.val)) + 1
+    grid_slider.set_val(count[forward_one])
+    slider_update(grid_slider.val)
+    
+fig, ax = plt.subplots(3,2, figsize=(10,10))
+plt.subplots_adjust(bottom=0.2)
+#fig.canvas.mpl_connect('button_press_event', slider_update)
+
+ax_slider = fig.add_axes([0.1, 0.05, 0.8, 0.03]) # Run Slider
+grid_slider = Slider(ax_slider, 'Run', 0, max(count), valinit=count[0], valstep=count)
+grid_slider.on_changed(slider_update)
+
+ax_play_pause = fig.add_axes([0.15, 0.1, 0.05, 0.05]) # Play/Pause Button
+play_pause_button = Button(ax_play_pause, '>||')
+play_pause_button.on_clicked(play_pause)
+
+ax_left_button = fig.add_axes([0.1, 0.1, 0.05, 0.05]) # Left Button
+left_button = Button(ax_left_button, '<')
+left_button.on_clicked(left_button_func)
+
+ax_right_button = fig.add_axes([0.2, 0.1, 0.05, 0.05]) # Right Button
+right_button = Button(ax_right_button, '>')
+right_button.on_clicked(right_button_func)
+
+anim = FuncAnimation(fig, 
+                     animation_setting_new_slider_value,
+                     frames=len(combination_list),
+                     interval=400
+                     ) # setting up animation
+anim.running = True # setting off animation
 
 # %%
+diff_pred_to_actual_logew = []
+for i in range(len(predicted_log_Y_all_ols)):
+    diff_pred_to_actual_logew.append(predicted_log_Y_all_ols[i] - log_Y_all[i])
+
+temp2 = [final_results['red_ew_excess_error'][i]+final_results['blue_ew_excess_error'][i] for i in range(len(final_results['red_ew_excess_error']))]
+
+temp = np.delete(temp2, negative_runs_all, axis=0)
+
+# correlation matrix between temp and diff_pred_to_actual_logew
+corr = np.corrcoef(temp, diff_pred_to_actual_logew)
+print(f'Correlation between EW Excess and difference between predicted and actual EWs: {corr[0][1]}')
+
+
+# %% NN LR
 ################################################################################
 print('TRENDS: NEURAL NETWORK REGRESSION VS SIMULATION PARAMETERS')
 ################################################################################
-
+%matplotlib inline
 # To double check, the linear regression is work as expected and there is some
 # improvements we could do. 
 
-log_X_train, log_X_test, log_Y_train, log_Y_test = train_test_split(log_X_all, log_Y_all, test_size=0.4)
+log_X_train, log_X_test, log_Y_train, log_Y_test = train_test_split(log_X_all, log_Y_all, test_size=0.2)
 
-regr = MLPRegressor(hidden_layer_sizes=(100,),max_iter=5000).fit(log_X_train, log_Y_train)
+regr = MLPRegressor(hidden_layer_sizes=(50,50,50),
+                    max_iter=5000,
+                    activation='tanh',
+                    ).fit(log_X_train, log_Y_train)
 y_pred = regr.predict(log_X_test)
 
 #calculating an R^2 score
@@ -2083,6 +2354,7 @@ plt.plot(regr.loss_curve_)
 plt.xlabel('Iterations')
 plt.ylabel('Loss')
 plt.title('Loss Curve for Neural Network')
+plt.savefig(f'{folder_name}/NN_loss_curve_inc_{incs[inclination_column]}.png', dpi=300)
 plt.show()
 
 # plotting the predicted log_Y values against the actual log_Y values
@@ -2109,9 +2381,37 @@ plt.ylabel('Log10(EW All_Obs)')
 plt.xlabel('Predicted Log10(EW All_Obs)')
 plt.title('Neural Network regression model for entire line EW python data')
 plt.legend(title=f'data_points = {len(log_Y_all)}, cross validated')
+plt.savefig(f'{folder_name}/all_EW_data_vs_predicted_NN_cross_val_inc_{incs[inclination_column]}.png', dpi=300)
 plt.show()
 
-# %%
+
+# %% 
+seed = 1
+model = KAN(width=[6,1,1], grid=3, k=3, seed=seed)
+
+log_X_train, log_X_test, log_Y_train, log_Y_test = train_test_split(log_X_all, log_Y_all, test_size=0.2, random_state=42)
+
+# covert to a torch object
+log_X_train = torch.tensor(log_X_train, dtype=torch.float32)
+log_Y_train = torch.tensor(log_Y_train, dtype=torch.float32)
+log_X_test = torch.tensor(log_X_test, dtype=torch.float32)
+log_Y_test = torch.tensor(log_Y_test, dtype=torch.float32)
+
+print(log_X_train.shape, log_Y_train.shape)
+
+dataset = {}
+dataset['train_input'] = log_X_train
+dataset['test_input'] = log_X_test
+dataset['train_label'] = log_Y_train
+dataset['test_label'] = log_Y_test
+
+model(dataset['train_input'])
+model.plot(beta=1)
+
+model.train(dataset, opt="LBFGS", steps=20, lamb=0.01, lamb_entropy=10.)
+model.plot()
+
+# %% EW ALL Corr Matrix
 ################################################################################
 print('TRENDS: EW VS SIMULATION PARAMETERS CORRELATION MATRIX')
 ################################################################################
@@ -2142,11 +2442,12 @@ ax.set_yticklabels(['Blue EW', 'Red EW', 'All EW'])
 ax.grid(False)
 plt.colorbar(im)
 plt.title(f'Spearman Correlation Matrix of EWs at {incs[inclination_column]}°')
+plt.savefig(f'{folder_name}/EW_corr_matrix_inc_{incs[inclination_column]}.png', dpi=300)
 plt.show()
 
 display(corr)
 
-# %%
+# %% LR Feature Ranking
 ################################################################################
 print('TRENDS: FEATURE RANKING THE PARAMETERS FROM THE LINEAR REGRESSION MODEL')
 ################################################################################
@@ -2169,7 +2470,7 @@ for rank, feature in zip(ranking, sim_parameters):
     display(Math(latex_style))  # Latex formatted string to LaTeX output
 
 
-# %%
+# %% Tool Å to km/s
 ################################################################################
 print('TOOL: Angstrom to km/s conversion and vice versa')
 ################################################################################
@@ -2194,6 +2495,244 @@ kms_to_angstrom(4000) #54Å(2500) 88Å(4000)
 ################################################################################
 print('END OF CODE')
 ################################################################################
+# %%
+# %% FEATURE ENGINEERING EW ALL LR
+################################################################################
+print('TRENDS: LINEAR REGRESSION OF THE WHOLE EW LINE VS SIMULATION PARAMETERS')
+################################################################################
+from sklearn.linear_model import ElasticNet
+from sklearn.linear_model import LassoCV
+
+%matplotlib inline
+# only log10 the 0th, 1st, 2nd, and 4th columns. keep the rest the same
+X = parameter_table[:,1:] # cut_parameter_table
+X_copy = X.copy() # for use later in script
+# TODO fix the copies to not delete wrong things
+log_Y_all_copy = log_Y_all.copy()
+log_Y_all = log_Y_all_copy.copy()
+log_Y_all_error_copy = log_Y_all_error.copy()
+log_Y_all_error = log_Y_all_error_copy.copy()
+X = np.delete(X, negative_runs_all, axis=0)
+log_X_all = np.column_stack((#np.log10(X[:,0]), # can help reduce error
+                             np.log10(X[:,1]),
+                             np.log10(X[:,2]),
+                             #X[:,3],
+                             np.log10(X[:,4]),
+                             #(X[:,5])
+                             ))
+# log_X_all = np.delete(log_X_all, nan_values_all, axis=0)
+
+model_all = LinearRegression()
+fixed_acc_exp_list = [] #TODO try fixing values to see is some are linear
+for i, val in enumerate(X):
+    if val[5] == 4.5:
+        fixed_acc_exp_list.append(i)
+log_X_all = np.delete(log_X_all, fixed_acc_exp_list, axis=0)
+log_Y_all = np.delete(log_Y_all, fixed_acc_exp_list)
+log_Y_all_error = np.delete(log_Y_all_error, fixed_acc_exp_list)
+
+model_all.fit(log_X_all, log_Y_all)#, 1/log_Y_all_error) # 1/unc for weights from errors
+
+print(f'R^2 Score: {model_all.score(log_X_all, log_Y_all)}')#, 1/log_Y_all_error)}')
+print('Model fitting equation:')
+display(Math(r'log(EW) = alog(p1) + blog(p2) + clog(p3) + d * p4 + elog(p5) + f * p6 + g'))
+eqn = f'log(EW) = a{sim_parameters[0]} + b{sim_parameters[1]} + c{sim_parameters[2]} + d{sim_parameters[3]} + e{sim_parameters[4]} + f{sim_parameters[5]} + g'
+display(Math(f'{eqn}'))
+
+print('Linear Regression model for the entire EW line') # in LaTeX style
+
+# eqn_all = f'log(EW) = {model_all.coef_[0]:.3f}log({sim_parameters[0]}) + {model_all.coef_[1]:.3f}log({sim_parameters[1]}) + {model_all.coef_[2]:.3f}log({sim_parameters[2]}) + {model_all.coef_[3]:.3f}{sim_parameters[3]} + {model_all.coef_[4]:.3f}log({sim_parameters[4]})+ {model_all.coef_[5]:.3f}{sim_parameters[5]} + {model_all.intercept_:.3f}$'
+# display(Math(f'{eqn_all}')) # Latex formatted string to LaTeX output
+
+print(f'Coefficents: {model_all.coef_}')
+print(f'Intercept: {model_all.intercept_}')
+predicted_log_Y_all = model_all.predict(log_X_all)
+
+# Ordinary Least Squares (OLS) model
+ols_X = sm.add_constant(log_X_all) # add an intercept value to the X parameters
+ols = sm.OLS(log_Y_all, ols_X) # statsmodels OLS model
+ols_result = ols.fit() # fitting the model
+print(ols_result.summary()) # summary of the model (errors, coefficients, etc)
+
+# Weighted Least Squares (WLS) model
+wls = sm.WLS(log_Y_all, ols_X, weights=1/log_Y_all_error) # including y errors effect
+wls_result = wls.fit() # fitting the model
+print(wls_result.summary()) # summary of the model (errors, coefficients, etc)
+
+# print the intercept and coefficient values ols
+# print(f'Intercept: {ols_result.params[0]}')
+# print(f'Coefficients: {ols_result.params[1:]}')
+# print(f'std_err: {ols_result.bse}')
+
+predicted_log_Y_all_ols = ols_result.predict(ols_X)
+
+# OLS error calculation using standard error of the coefficients
+predicted_log_Y_all_ols_err = []
+for i, _ in enumerate(ols_X):
+    x_err_plus_c = [ols_result.bse[j]*abs(ols_X[i][j]) for j in range(len(ols_X[i]))]
+    y_err = np.sqrt(np.sum(np.array(x_err_plus_c)**2))
+    predicted_log_Y_all_ols_err.append(y_err)
+
+predicted_log_Y_all_wls = wls_result.predict(ols_X)
+
+# WLS error calculation using standard error of the coefficients
+predicted_log_Y_all_wls_err = []
+for i, _ in enumerate(ols_X):
+    x_err_plus_c = [wls_result.bse[j]*abs(ols_X[i][j]) for j in range(len(ols_X[i]))]
+    y_err = np.sqrt(np.sum(np.array(x_err_plus_c)**2))
+    predicted_log_Y_all_wls_err.append(y_err)
+
+fig, ax = plt.subplots(1,3, figsize=(15,5))
+# SKlearn wls matches statsmodel wls
+#ax[0].scatter(predicted_log_Y_all, log_Y_all, color='green', label = 'sklearn wls', alpha=0.5)
+ax[0].errorbar(predicted_log_Y_all_ols, 
+               log_Y_all,
+               xerr=predicted_log_Y_all_ols_err,
+               yerr=log_Y_all_error,
+               fmt='none', 
+               ecolor='grey',
+               alpha=0.2,
+               zorder=-1
+)
+ax[0].scatter(predicted_log_Y_all_ols, log_Y_all, color='red', label = 'statsmodels ols', alpha = 0.5)
+ax[0].plot(log_Y_all, log_Y_all, label='y=y_pred')
+ax[0].plot(log_Y_all+1, log_Y_all, label='y=y_pred-1', linestyle='--')
+ax[0].plot(log_Y_all-1, log_Y_all, label='y=y_pred+1', linestyle='--')
+ax[0].set_ylabel('Log10(EW All_Obs) -- TRUTH')
+ax[0].set_xlabel('Predicted Log10(EW All_Obs)')
+ax[0].set_title('OLS Linear regression model for \n entire line EW python data')
+ax[0].set_xlim(-2,4)
+ax[0].set_ylim(-4,3)
+ax[0].legend()
+
+ax[2].errorbar(predicted_log_Y_all_wls, 
+               log_Y_all,
+               xerr=predicted_log_Y_all_wls_err,
+               yerr=log_Y_all_error,
+               fmt='none', 
+               ecolor='grey',
+               alpha=0.2,
+               zorder=-1
+)
+ax[2].scatter(predicted_log_Y_all_wls, log_Y_all, color='blue', label = 'statsmodels wls', alpha = 0.5)
+ax[2].plot(log_Y_all, log_Y_all, label='y=y_pred')
+ax[2].set_ylabel('Log10(EW All_Obs) -- TRUTH')
+ax[2].set_xlabel('Predicted Log10(EW All_Obs)')
+ax[2].set_title('WLS Linear regression model for \n entire line EW python data')
+ax[2].set_xlim(-2,4)
+ax[2].set_ylim(-4,3)
+ax[2].legend()
+# colour maps to run numbers
+temp = np.delete(np.arange(0,729), negative_runs_all)
+target = ax[1].scatter(predicted_log_Y_all, log_Y_all, c=temp, cmap='rainbow')
+plt.colorbar(target, ax=ax[1], label='Grid Length')
+ax[1].plot(log_Y_all, log_Y_all, label='y=y_pred')
+ax[1].set_ylabel('Log10(EW All_Obs)')
+ax[1].set_xlabel('Predicted Log10(EW All_Obs)')
+ax[1].set_title('Customising regression model for \n entire line EW python data')
+ax[1].set_xlim(-2,4)
+ax[1].set_ylim(-4,3)
+ax[1].legend()
+plt.savefig(f'{folder_name}/all_EW_data_vs_predicted_inc_{incs[inclination_column]}.png', dpi=300)
+plt.show()
+
+#cross validation
+scores = cross_val_score(model_all, log_X_all, log_Y_all, cv=5, n_jobs=5)
+print(f'Cross validated R^2 score: {scores}')
+
+# TODO Difference between predicted and actual values correlates to EW_Excess?
+#finding outliers from model
+# parameter_table_copy = parameter_table.copy()
+# parameter_table_without_negative_runs = np.delete(parameter_table_copy, negative_runs_all, axis=0)
+count = []
+for i in range(len(predicted_log_Y_all_ols)):
+    if predicted_log_Y_all_ols[i] > log_Y_all[i]+1 or predicted_log_Y_all_ols[i] < log_Y_all[i]-1:
+        lower_line = predicted_log_Y_all_ols[i] - 1
+        if log_Y_all[i] < lower_line:
+            #print(f'{log_Y_all[i]:.3f}, {predicted_log_Y_all_ols[i]:.3f}, {grid_length_without_negative_runs[i]}, {i}')
+            count.append(grid_length_without_negative_runs[i]) # poor indexes
+
+combination_list = [parameter_table[i] for i in count] # index to combination
+combination_list = np.delete(combination_list, 0, axis=1) # remove first column
+
+# %%
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.widgets import Button, Slider
+from matplotlib.animation import FuncAnimation
+%matplotlib qt
+
+def slider_update(val):
+    for i in range(6):
+        ax[i//2, i%2].clear()
+        ax[i//2, i%2].hist(combination_list[:,i], bins=50, color='orange')
+        xlabel = sim_parameters[i]
+        ax[i//2, i%2].set_xlabel(xlabel)
+        ax[i//2, i%2].set_ylabel('Frequency')
+        # highlight the bar on the plot for the specific combination val index
+        index = count.index(int(val))
+        ax[i//2, i%2].axvline(x=combination_list[int(index)][i], color='black', linestyle='--', alpha=0.5)
+        # set ylimit to 50
+        ax[i//2, i%2].set_ylim(0,len(count))
+
+    fig.suptitle(f'Parameter Histograms for poor EW fits \n Combination {int(val)}')
+    fig.canvas.draw_idle()
+
+def animation_setting_new_slider_value(frame):
+    if anim.running:
+        if grid_slider.val == max(count): # TODO size of grid
+            grid_slider.set_val(count[0])
+        else:
+            next_index = count.index(int(grid_slider.val)) + 1
+            grid_slider.set_val(count[next_index])
+            
+def play_pause(event):
+    if anim.running:
+        anim.running = False
+        slider_update(grid_slider.val)
+    else:
+        anim.running = True
+
+def left_button_func(_) -> None:
+    anim.running = False
+    back_one = count.index(int(grid_slider.val)) - 1
+    grid_slider.set_val(count[back_one])
+    slider_update(grid_slider.val)
+
+def right_button_func(_) -> None:
+    anim.running = False
+    forward_one = count.index(int(grid_slider.val)) + 1
+    grid_slider.set_val(count[forward_one])
+    slider_update(grid_slider.val)
+    
+fig, ax = plt.subplots(3,2, figsize=(10,10))
+plt.subplots_adjust(bottom=0.2)
+#fig.canvas.mpl_connect('button_press_event', slider_update)
+
+ax_slider = fig.add_axes([0.1, 0.05, 0.8, 0.03]) # Run Slider
+grid_slider = Slider(ax_slider, 'Run', 0, max(count), valinit=count[0], valstep=count)
+grid_slider.on_changed(slider_update)
+
+ax_play_pause = fig.add_axes([0.15, 0.1, 0.05, 0.05]) # Play/Pause Button
+play_pause_button = Button(ax_play_pause, '>||')
+play_pause_button.on_clicked(play_pause)
+
+ax_left_button = fig.add_axes([0.1, 0.1, 0.05, 0.05]) # Left Button
+left_button = Button(ax_left_button, '<')
+left_button.on_clicked(left_button_func)
+
+ax_right_button = fig.add_axes([0.2, 0.1, 0.05, 0.05]) # Right Button
+right_button = Button(ax_right_button, '>')
+right_button.on_clicked(right_button_func)
+
+anim = FuncAnimation(fig, 
+                     animation_setting_new_slider_value,
+                     frames=len(combination_list),
+                     interval=400
+                     ) # setting up animation
+anim.running = True # setting off animation
+
+
 
 
 
@@ -2971,3 +3510,18 @@ print('END OF CODE')
 #     # fraction = (data - gaussian_fit) / continuum_fit 
 #     # ew = [np.sum(fraction[i] * wave_diff) for i in range(len(fraction))]
 #     # return ew
+
+# # %% KAN Symbolic regression
+# ################################################################################
+# print('TRENDS: SYMBOLIC REGRESSION VS SIMULATION PARAMETERS')
+# ################################################################################
+# import torch
+# #from gplearn.genetic import SymbolicRegressor
+# from kan import *
+
+# log_X_train, log_X_test, log_Y_train, log_Y_test = train_test_split(log_X_all, log_Y_all, test_size=0.2, random_state=42)
+# # convert data to import into another juypter notebok
+# np.savetxt('log_X_train.csv', log_X_train, delimiter=',')
+# np.savetxt('log_X_test.csv', log_X_test, delimiter=',')
+# np.savetxt('log_Y_train.csv', log_Y_train, delimiter=',')
+# np.savetxt('log_Y_test.csv', log_Y_test, delimiter=',')
