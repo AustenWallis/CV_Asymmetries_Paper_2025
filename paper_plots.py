@@ -536,14 +536,14 @@ to_axe_runs = np.unique(np.concatenate(to_axe_runs))
 # randomly select 30 data points to plot
 seed = np.random.choice(np.arange(1,1000,1))
 print(seed)
-np.random.seed(seed) # 927
+np.random.seed(927) # 927
 to_keep_runs = [i for i in range(729) if i not in to_axe_runs]
 keep_samples = np.random.choice(to_keep_runs, 30, replace=False)
 cut_runs = np.array([i for i in range(729) if i not in keep_samples])
         
 print(keep_samples)
 
-colours = ['black', 'red', 'blue']
+colours = ['red', 'black', 'blue']
 #mask_labels = ['$500-4000ms^{-1}$', '$1000-4000ms^{-1}$', '$1000-2500ms^{-1}$']
 mask_labels = ['$900-2500ms^{-1}$', '$1000-2500ms^{-1}$', '$1100-2500ms^{-1}$']
 
@@ -558,24 +558,25 @@ for i, mask in enumerate(masks):
     #cut_grid_length = np.delete(grid_length, cut_runs)
 
     ranges = slice(0, -1)
-    plt.errorbar(
-        cut_red_ew_excess,
-        cut_blue_ew_excess,
-        xerr=cut_red_ew_excess_error,
-        yerr=cut_blue_ew_excess_error,
-        fmt='none',
-        ecolor='grey',
-        alpha=0.5,
-        zorder=-1
-    )
+    if i == 1:
+        plt.errorbar(
+            cut_red_ew_excess,
+            cut_blue_ew_excess,
+            xerr=cut_red_ew_excess_error,
+            yerr=cut_blue_ew_excess_error,
+            fmt='none',
+            ecolor='grey',
+            alpha=0.5,
+            zorder=-1
+        )
 
-    plt.scatter(
-        cut_red_ew_excess,
-        cut_blue_ew_excess,
-        c=colours[i],
-        s=10,
-        label=mask_labels[i]
-    )
+        plt.scatter(
+            cut_red_ew_excess,
+            cut_blue_ew_excess,
+            c=colours[i],
+            s=10,
+            label=mask_labels[i]
+        )
 
 # Build a dictionary to store data points for each run
 data_points = {}
@@ -610,14 +611,14 @@ for idx, run_index in enumerate(keep_samples):
     #         arrowprops=dict(arrowstyle='->', color=color, lw=1),
     #         annotation_clip=False
     #     )
-    start_point = points[0]
-    end_point = points[1]
+    start_point = points[1]
+    end_point = points[0]
     color = arrow_colors[0]
     plt.annotate(
         '',
         xy=end_point,
         xytext=start_point,
-        arrowprops=dict(arrowstyle='->', color=color, lw=1),
+        arrowprops=dict(arrowstyle='-|>', color=color, lw=1),
         annotation_clip=False
     )
     start_point = points[1]
@@ -627,19 +628,19 @@ for idx, run_index in enumerate(keep_samples):
         '',
         xy=end_point,
         xytext=start_point,
-        arrowprops=dict(arrowstyle='->', color=color, lw=1),
+        arrowprops=dict(arrowstyle='-|>', color=color, lw=1),
         annotation_clip=False
     )
-    start_point = points[2]
-    end_point = points[0]
-    color = arrow_colors[2]
-    plt.annotate(
-        '',
-        xy=end_point,
-        xytext=start_point,
-        arrowprops=dict(arrowstyle='->', color=color, lw=1),
-        annotation_clip=False
-    )
+    # start_point = points[2]
+    # end_point = points[0]
+    # color = arrow_colors[2]
+    # plt.annotate(
+    #     '',
+    #     xy=end_point,
+    #     xytext=start_point,
+    #     arrowprops=dict(arrowstyle='->', color=color, lw=1),
+    #     annotation_clip=False
+    # )
     # Add a colorbar to represent the run indices
 #sm = plt.cm.ScalarMappable(cmap=colormap, norm=normalize)
 #sm.set_array([])

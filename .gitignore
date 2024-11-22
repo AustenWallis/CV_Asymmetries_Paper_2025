@@ -4,3 +4,10 @@ Emission_Line_Asymmetries/Plots
 __pycache__
 .ipynb_checkpoints
 Asymmetries_notes.txt
+.DS_Store
+Emission_Line_Asymmetries/11_88_mask
+Emission_Line_Asymmetries/20_55_mask
+Emission_Line_Asymmetries/22_55_mask
+Emission_Line_Asymmetries/22_88_mask
+Emission_Line_Asymmetries/22_90_mask
+Emission_Line_Asymmetries/24_55_mask

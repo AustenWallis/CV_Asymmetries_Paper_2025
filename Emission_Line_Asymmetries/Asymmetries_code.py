@@ -43,9 +43,34 @@ from prettytable import PrettyTable
 from matplotlib.widgets import Button, Slider
 from matplotlib.animation import FuncAnimation
 from matplotlib.lines import Line2D
+from matplotlib.ticker import MaxNLocator
 import itertools
+import mplcyberpunk # mplcyberpunk.add_glow_effects()
+import matplotx
+import scienceplots
+from sklearn.neighbors import KernelDensity
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import Ridge
+from sklearn.linear_model import Lasso
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_val_predict
+from sklearn.feature_selection import RFE
+from sklearn.neural_network import MLPRegressor
+from IPython.display import display, Math, Latex, Markdown
+import statsmodels.api as sm
+import scipy.stats as stats
+import pandas as pd
+import datetime
+import os
+import scipy.signal as signal
 
 plt.style.use('Solarize_Light2')
+np.random.seed(5025)
+# os.environ["PATH"] += os.pathsep + '/Library/TeX/texbin'
+#plt.style.use('science')
 script_ran_once = False
 
 # %% 2
@@ -58,11 +83,14 @@ files = os.listdir(path_to_grid) # list of files in directory
 
 # -------INPUTS-------- #
 wavelength_range = (6435, 6685) # set desired wavelength range, start with the narrowest range
-inclination_column = 10 # 10-14 = 20,45,60,72.5,85
+inclination_column = 11 # 10-14 = 20,45,60,72.5,85
 grid_mixed = True # if grid is mixed, set to True to rerun the script at difference wavelength ranges
                   # you can change the wavelength range in the second input below.
+# Be sensible with intervals or you'll break code. (near peak first, far peak second)
+blue_peak_mask = (24,55) # number of angstroms to cut around the peak, blue minus.
+red_peak_mask = (24,55) # number of angstroms to cut around the peak, red plus.
 # --------------------- #
-
+H_alpha = 6562.819
 grid_length = np.arange(0,729)
 if not grid_mixed:
     run_number = grid_length # run number ranges range(0,729)
@@ -94,7 +122,7 @@ wavelengths = wavelengths[wave_mask] # updating to new wavelength range
 grid = np.empty((len(sorted_files), len(wavelengths))) # empty array to store flux values
 wavelength_grid = np.empty((len(sorted_files), len(wavelengths))) # empty array to store wavlength values
 
-for i in range(len(sorted_files)):
+for i in tqdm(range(len(sorted_files))):
     flux = np.loadtxt(sorted_files[i], usecols=inclination_column, skiprows=81)[::-1] # flux values for each file
     grid[i] = flux[wave_mask] # adding fluxes into the grid
     wave = np.loadtxt(sorted_files[i], usecols=1, skiprows=81)[::-1] # wavelength values for each file
@@ -396,12 +424,6 @@ blue_wavelengths = wavelengths[wavelengths < H_alpha]
 red_wavelengths = wavelengths[wavelengths > H_alpha]
 print(f'Blue: {blue_wavelengths[0]}-{blue_wavelengths[-1]}Å  Red: {red_wavelengths[0]}-{red_wavelengths[-1]}Å  H_alpha: {H_alpha}Å')
 
-# -------INPUTS-------- #
-# Be sensible with intervals or you'll break code. (near peak first, far peak second)
-blue_peak_mask = (22,90) # number of angstroms to cut around the peak, blue minus.
-red_peak_mask = (22,90) # number of angstroms to cut around the peak, red plus.
-# --------------------- #
-
 # Calculating the equivalent width excess data points for the PYTHON Grid
 fitted_grid, fit_con, fit_parameters, initials_all, pcov_all, infodict_all = fit_procedure(wavelengths, grid) #TODO  this causes the covariance issue
 blue_ew_excess = equivalent_width_excess(wavelengths, grid, fitted_grid, fit_con, shift='blue', peak_mask=blue_peak_mask)
@@ -436,6 +458,203 @@ if grid_mixed and not script_ran_once:
 if grid_mixed and script_ran_once:
     print("You've ran the mixed grid, run step 8 to mix the data.")
 
+# %% 6 (FWHM)
+################################################################################
+print('STEP 6 (FWHM): CALCULATING THE EQUIVALENT WIDTH EXCESSES')
+################################################################################
+
+def fwhm_equivalent_width_excess(wavelengths, 
+                                 data, 
+                                 gaussian_fit, 
+                                 continuum_fit,
+                                 fwhm_bounds,
+                                 shift='blue', 
+                                 inner=0.5, 
+                                 outer=2.0):
+    """ Returning the equivalent width excesses for each spectrum in the grid.
+    You can choose to return the blue or red wing excesses by setting the shift.
+    
+    Formula: EW_excess = sum((data - gaussian_fit) / continuum_fit) * delta_wavelength
+    
+    The mask limits for this formula are set as multiples of FWHM.
+    
+    PYTHON fluxes are left aligned to the wavelengths when binned. So code here
+    reflects the delta_wavelength is associated with the left side flux value 
+    of a bin. The peak_mask selected by the user may not exactly align with a 
+    wavelength value. Hence, the code will find the nearest neighbour to the 
+    wavelength within the range of the mask. This is also to exclude partial bins
+    where large assumptions about the flux behaviour would have to be made. 
+    TO BE CHANGED LATER IF PYTHON CHANGES BINNING STRUCTURE.
+    
+    Parameters:
+        wavelengths (ndarray): wavelength array
+        data (ndarray): the original data
+        gaussian_fit (ndarray): the gaussian fit to the data
+        continuum_fit (ndarray): the continuum fit to the data
+        fwhm_bounds (ndarray): the blue and red wavelengths for the fwhm bounds
+        shift (str): 'blue' or 'red' for the blue or red wing excesses
+        inner (float): the inner limit fwhm multiple for the mask
+        outer (float): the outer limit fwhm multiple for the mask
+    Returns:
+        ew (ndarray): equivalent width excesses for each spectrum in the grid
+    """
+    
+    H_alpha = 6562.819 #4861.333	#6562.819 # Å
+    
+    # adjust the fwhm bounds to the inner and outer limits
+    blue_fwhm = fwhm_bounds[:,0]
+    inner_blue = H_alpha - ((H_alpha - blue_fwhm) * inner)
+    outer_blue = H_alpha - ((H_alpha - blue_fwhm) * outer)
+    b_peak_mask = np.array([inner_blue, outer_blue]).T # blue peak mask to not conflict w/globals
+    
+    red_fwhm = fwhm_bounds[:,1]
+    inner_red = H_alpha + ((red_fwhm - H_alpha) * inner)
+    outer_red = H_alpha + ((red_fwhm - H_alpha) * outer)
+    r_peak_mask = np.array([inner_red, outer_red]).T # red peak mask to not conflict w/globals
+    
+    if shift == 'blue':
+        
+        # cutting to only have wavelengths the blue side of H_alpha
+        index = np.where(wavelengths < H_alpha - peak_mask[0])[0][-1] # index of the last wavelength less than H_alpha
+        slice_index_high_lambda = index + 1 # index to slice the data
+        wavelengths = wavelengths[:slice_index_high_lambda] # slicing the wavelengths
+        data = data[:, :slice_index_high_lambda] # slicing the data
+        gaussian_fit = gaussian_fit[:, :slice_index_high_lambda] # slicing the gaussian fit
+        continuum_fit = continuum_fit[:, :slice_index_high_lambda] # slicing the continuum fit
+        
+        index = np.where(wavelengths > H_alpha - peak_mask[1])[0][0] # index of the first wavelength greater than mask limits
+        slice_index_low_lambda = index # index to slice the data
+        wavelengths = wavelengths[slice_index_low_lambda:] # slicing the wavelengths
+        data = data[:, slice_index_low_lambda:] # slicing the data
+        gaussian_fit = gaussian_fit[:, slice_index_low_lambda:] # slicing the gaussian fit
+        continuum_fit = continuum_fit[:, slice_index_low_lambda:] # slicing the continuum fit       
+        
+    if shift == 'red':
+        
+        # cutting to only have wavelengths the red side of H_alpha
+        index = np.where(wavelengths > H_alpha + peak_mask[0])[0][0] # index of the first wavelength greater than H_alpha
+        slice_index_low_lambda = index # index to slice the data
+        wavelengths = wavelengths[slice_index_low_lambda:] # slicing the wavelengths
+        data = data[:, slice_index_low_lambda:] # slicing the data
+        gaussian_fit = gaussian_fit[:, slice_index_low_lambda:] # slicing the gaussian fit
+        continuum_fit = continuum_fit[:, slice_index_low_lambda:] # slicing the continuum fit
+        
+        index = np.where(wavelengths < H_alpha + peak_mask[1])[0][-1] # index of the last wavelength less than mask limits
+        slice_index_high_lambda = index + 1 # index to slice the data
+        wavelengths = wavelengths[:slice_index_high_lambda] # slicing the wavelengths
+        data = data[:, :slice_index_high_lambda] # slicing the data
+        gaussian_fit = gaussian_fit[:, :slice_index_high_lambda] # slicing the gaussian fit
+        continuum_fit = continuum_fit[:, :slice_index_high_lambda] # slicing the continuum fit
+        
+    # calculating the delta wavelengths for left aligned
+    wave_diff = np.diff(wavelengths) 
+    #cut the last element off the flux lists to match the len(delta wavelength)
+    wavelengths = wavelengths[:-1]
+    data = data[:, :-1]
+    gaussian_fit = gaussian_fit[:, :-1]
+    continuum_fit = continuum_fit[:, :-1]
+    
+    # Equivalent width excess calculation
+    fraction = (data - gaussian_fit) / continuum_fit
+    ew = [np.sum(fraction[i] * wave_diff) for i in range(len(fraction))]
+        
+    return ew
+
+def fwhm_calculations(wavelengths, data, continuum_fit):
+    """ A procedure to find the FWHM of a spectral line and report the 
+    blue and red wavelengths either side of the peak.
+
+    Args:
+        wavelengths (ndarray): wavelength array
+        data (ndarray): the original data
+        continuum_fit (ndarray): the continuum fit to the data
+    """
+    H_alpha = 6562.819 # Å
+    # Adjusting for the trend in continuum.
+    data = data - continuum_fit
+    
+    # Finding the greatest flux value in the spectral line
+    max_flux = np.array([np.max(data[i]) for i in range(len(data))])
+    
+    # Searching for the blue FWHM bound
+    blue_fwhms = np.array([])
+    for i in range(len(data)):
+        for j in range(len(data[i])):
+            if data[i][j] >= max_flux[i]/2:
+                blue_bound = wavelengths[j]
+                break
+        blue_fwhms = np.append(blue_fwhms, blue_bound)
+    
+    # Searching for the red FWHM bound
+    red_fwhms = np.array([])
+    for i in range(len(data)):
+        for j in range(len(data[i])):
+            if data[i][::-1][j] >= max_flux[i]/2:
+                red_bound = wavelengths[::-1][j]
+                break
+        red_fwhms = np.append(red_fwhms, red_bound)
+        
+    fwhm_bounds = np.array((blue_fwhms, red_fwhms)).T
+    
+    return fwhm_bounds
+
+def fit_procedure(wavelengths, grid):
+    """This function is to simplify the procedure of fitting the data. We take
+    the PYTHON grid and inital """
+    # Fitting the grid's emission peak AND continuum
+    fit_parameters, initials_all, pcov_all, infodict_all = fit_data(wavelengths, grid) # optimal parameters for a spectrum
+    fitted_grid = np.array([])
+    for spectrum in range(len(grid)):
+        fitted_grid = np.append(fitted_grid, gaussian_with_continuum(wavelengths, *fit_parameters[spectrum])) # simulating that optimal fit
+    fitted_grid = fitted_grid.reshape(len(grid), len(wavelengths))
+
+    # Fitting the grid's continuum ONLY
+    fit_con = np.array([])
+    for spectrum in range(len(grid)):
+        fit_con = np.append(fit_con, fit_parameters[spectrum][3]*(wavelengths-H_alpha) + fit_parameters[spectrum][4])
+    fit_con = fit_con.reshape(len(grid), len(wavelengths))
+    return fitted_grid, fit_con, fit_parameters, initials_all, pcov_all, infodict_all
+
+
+# Displaying the blue and red wavelengths either side of H_alpha
+blue_wavelengths = wavelengths[wavelengths < H_alpha]
+red_wavelengths = wavelengths[wavelengths > H_alpha]
+print(f'Blue: {blue_wavelengths[0]}-{blue_wavelengths[-1]}Å  Red: {red_wavelengths[0]}-{red_wavelengths[-1]}Å  H_alpha: {H_alpha}Å')
+
+# Calculating the equivalent width excess data points for the PYTHON Grid
+fitted_grid, fit_con, fit_parameters, initials_all, pcov_all, infodict_all = fit_procedure(wavelengths, grid) #TODO  this causes the covariance issue
+blue_ew_excess = fwhm_equivalent_width_excess(wavelengths, grid, fitted_grid, fit_con, shift='blue', peak_mask=blue_peak_mask)
+red_ew_excess = fwhm_equivalent_width_excess(wavelengths, grid, fitted_grid, fit_con, shift='red', peak_mask=red_peak_mask)
+
+# Calculating the equivalent width excess errors from resampling grid
+resampled_blue_ew_excess = np.array([])
+resampled_red_ew_excess = np.array([])
+resampled_grids = np.array([]) # to store grid for EW calculations later
+samples = 150
+for sample in tqdm(range(samples)):
+    resampled_grid = resample_data(wavelengths, grid, sk_noise_error) # resampled grid
+    resampled_grids = np.append(resampled_grids, resampled_grid)
+    fitted_grid, fit_con, fit_parameters, initials_all, _, _ = fit_procedure(wavelengths, resampled_grid)
+    blue = equivalent_width_excess(wavelengths, resampled_grid, fitted_grid, fit_con, shift='blue', peak_mask=blue_peak_mask)
+    red = equivalent_width_excess(wavelengths, resampled_grid, fitted_grid, fit_con, shift='red', peak_mask=red_peak_mask)
+    resampled_blue_ew_excess = np.append(resampled_blue_ew_excess, blue)
+    resampled_red_ew_excess = np.append(resampled_red_ew_excess, red)
+#resampled grid shape is 150 * (run_number x number of wavelengths)
+resampled_grids = resampled_grids.reshape(samples, len(grid), len(wavelengths))
+resampled_blue_ew_excess = resampled_blue_ew_excess.reshape(samples, len(grid))
+resampled_red_ew_excess = resampled_red_ew_excess.reshape(samples, len(grid))
+blue_ew_excess_error = np.std(resampled_blue_ew_excess, axis=0)
+red_ew_excess_error = np.std(resampled_red_ew_excess, axis=0)
+
+if not grid_mixed:
+    print("You aren't running a mixed grid. Run Step 7 and skip Step 8")
+    
+if grid_mixed and not script_ran_once:
+    print('You are running a mixed grid. Be sure to run Step 7.')
+    
+if grid_mixed and script_ran_once:
+    print("You've ran the mixed grid, run step 8 to mix the data.")
+    
 # %% TOOL
 ################################################################################
 print('TOOL: ANIMATED PLOTTING')
@@ -661,6 +880,7 @@ def circle(radius):
     b = radius * np.sin(theta)
     return (a, b)
 
+plt.figure(figsize=(7,7))
 ranges = slice(0,-1) # to select particular portions of the grid if desired
 plt.errorbar(final_results['red_ew_excess'][ranges],
              final_results['blue_ew_excess'][ranges], 
@@ -669,23 +889,49 @@ plt.errorbar(final_results['red_ew_excess'][ranges],
              fmt='none', 
              ecolor = 'grey', 
              alpha=0.5,
-             zorder=2
+            # increase the size of the marker
+             zorder=-1
              ) # error bars for scatterplot below
 target = plt.scatter(final_results['red_ew_excess'][ranges],
                      final_results['blue_ew_excess'][ranges],
-                     c=grid_length[ranges],
+                     c='black',
+                     #c=grid_length[ranges],
                      s=15,
                      label='Grid Data',
-                     cmap='rainbow',
-                     zorder=3
+                     #alpha=0.2\
+                     #cmap='rainbow',
+                     #zorder=3
                      ) # scatter plot assigned as target for colour bar
-plt.colorbar(target, label='Run Number') # colour bar
+#plt.colorbar(target, label='Run Number') # colour bar
+
+kde = KernelDensity(bandwidth=0.9, kernel='gaussian')
+kde.fit(np.vstack([final_results['red_ew_excess'][ranges], final_results['blue_ew_excess'][ranges]]).T)
+
+xcenters = np.linspace(min(final_results['red_ew_excess'][ranges])-2, max(final_results['red_ew_excess'][ranges])+2, 100)
+ycenters = np.linspace(min(final_results['blue_ew_excess'][ranges])-2, max(final_results['blue_ew_excess'][ranges])+2, 100)
+X, Y = np.meshgrid(xcenters, ycenters)
+xy_sample = np.vstack([X.ravel(), Y.ravel()]).T
+Z = np.exp(kde.score_samples(xy_sample)).reshape(X.shape)
+
+plt.contourf(X, Y, Z, cmap='Grays', alpha=0.6)
+plt.contour(X, Y, Z, colors='black')
 
 # Plotting Teo's data
-plt.scatter(bz_cam[:,0], bz_cam[:,1], label='BZ Cam', color='black', s=10, marker='v')
-plt.scatter(mv_lyr[:,0], mv_lyr[:,1], label='MV Lyr', color='black', s=10, marker='^')
-plt.scatter(v425_cas[:,0], v425_cas[:,1], label='V425 Cas', color='black', s=10, marker='<')
-plt.scatter(v751_cyg[:,0], v751_cyg[:,1], label='V751 Cyg', color='black', s=10, marker='>')
+# plt.scatter(bz_cam[:,0], bz_cam[:,1], label='BZ Cam', color='black', s=10, marker='v')
+# plt.scatter(mv_lyr[:,0], mv_lyr[:,1], label='MV Lyr', color='black', s=10, marker='^')
+# plt.scatter(v425_cas[:,0], v425_cas[:,1], label='V425 Cas', color='black', s=10, marker='<')
+# plt.scatter(v751_cyg[:,0], v751_cyg[:,1], label='V751 Cyg', color='black', s=10, marker='>')
+# plot all teos data as the same scatter plot
+plt.scatter(bz_cam[:,0], bz_cam[:,1], label='Cúneo et al. (2023)', color='blue', s=10, marker='o')
+plt.scatter(mv_lyr[:,0], mv_lyr[:,1], color='blue', s=10, marker='o')
+plt.scatter(v425_cas[:,0], v425_cas[:,1], color='blue', s=10, marker='o')
+plt.scatter(v751_cyg[:,0], v751_cyg[:,1], color='blue', s=10, marker='o')
+
+#TODO Verify references WE have 20 or 45 degrees Binary.period(hr) 3.2
+	# 1.	BZ Cam: 12°–40° (References: Ringwald & Naylor 1998; Honeycutt et al. 2013) Binary.period(hr) 3.685
+	# 2.	V751 Cyg: <50° (References: Greiner et al. 1999; Patterson et al. 2001) Binary.period(hr) 3.467
+	# 3.	MV Lyr: 10°–13° (Skillman et al. 1995); 7° ± 1° (Linnell et al. 2005) Binary.period(hr) 3.2
+	# 4.	V425 Cas: 25° ± 9° (Shafter & Ulrich 1982; Ritter & Kolb 2003) Binary.period(hr) 3.6
 
 # vertical and horizontal lines at 0 i.e axes
 plt.axvline(x=0, color='black', linestyle='--', alpha=0.5, zorder = 1)
@@ -697,13 +943,19 @@ plt.ylabel('Blue Wing EW Excess ($Å$)')
 plt.title('Red vs Blue Wing Excess')
 plt.xlim(min(final_results['red_ew_excess'])-2,max(final_results['red_ew_excess'])+2)
 plt.ylim(min(final_results['blue_ew_excess'])-2,max(final_results['blue_ew_excess'])+2)
-plt.legend()
+plt.legend(loc='upper left')
 plt.show()
 
 # %% 10
 ################################################################################
 print('STEP 10: CUTTING POOR DATA FITS LIKE BIMODAL EMISSION LINES OR NO VISIBLE EMISSION LINES')
 ################################################################################
+
+# if final results file exists
+if os.path.exists(f'final_results_inc_col_{inclination_column}.npy'):
+    final_results = np.load(f'final_results_inc_col_{inclination_column}.npy', allow_pickle=True).item()
+else:
+    print('not exist')
 
 %matplotlib inline
 
@@ -775,11 +1027,81 @@ def rss(data, fit) -> list:
         rss.append(summation)
     return rss
 
+def double_peak_detection(fluxes, continuum) -> list:
+    """A systematic method to identify the number of peaks with a spectrum. 
+    Primarily important in detecting the bimodal emission lines.
+
+    Args:
+        fluxes (list): A spectrums flux values.
+        continuum (list): The corressponding continuum fit values. 
+
+    Returns:
+        tuple and int: Scipy peak indexes and information, the number of peaks.
+    """
+    
+    fluxes = np.array(fluxes)
+    continuum = np.array(continuum)
+    
+    fluxes -= continuum
+    peak = signal.find_peaks(fluxes, height=0.3*np.max(fluxes), distance=10, prominence=0.1*np.max(fluxes))
+    number = len(peak[0])
+    
+    return peak, number
+
+# test_runs = np.arange(0,729,1)
+# #numbers = []
+# for test_run in test_runs:
+#     if test_run not in cut_runs:
+#         test_peak, number_of_peaks = double_peak_detection(
+#             final_results['grid'][test_run],
+#             final_results['sk_con_data'][test_run])
+#         print(f'Number of Peaks {test_run} : {number_of_peaks}')
+#         numbers.append(number_of_peaks)
+#         if number_of_peaks == 1:
+#             test = np.array(final_results['grid'][test_run]) - np.array(final_results['sk_con_data'][test_run])
+            
+
+#             plt.plot(final_results['wavelength_grid'][test_run],
+#                     test, 
+#                     label='Original Data',
+#                     color='black'
+#                     )
+#             for i in range(number_of_peaks):
+#                 plt.vlines(x=final_results['wavelength_grid'][test_run][test_peak[0][i]],
+#                         ymin=min(test),
+#                         ymax=max(test),
+#                         color='red',
+#                         linestyle='--'
+#                         )
+#             plt.show()
+
+# plt.hist(numbers, bins=50)
+# plt.ylabel('Number of Occurences')
+# plt.xlabel('Number of Detected Peaks')
+# #plt.title(f'Inclination {incs[inclination_column]}°')
+# plt.show()
+
+
 # working out error data for each spectra and fit
 frms_data = frms(final_results['grid'], final_results['fitted_grid'], final_results['fit_con'])
 rms_data = rms(final_results['grid'], final_results['fitted_grid'], final_results['fit_con'])
 chi_2_data = chi_2(final_results['grid'], final_results['fitted_grid'], final_results['sk_noise_error'])
 rss_data = rss(final_results['grid'], final_results['fitted_grid'])
+
+cut_runs_3 = []
+peak_colour_map = []
+test_runs = np.arange(0,729,1)
+for test_run in test_runs:
+    test_peak, number_of_peaks = double_peak_detection(
+        final_results['grid'][test_run],
+        final_results['sk_con_data'][test_run])
+    if number_of_peaks > 2: 
+        cut_runs_3.append(test_run)
+        peak_colour_map.append('pink')
+    elif number_of_peaks == 2: 
+        peak_colour_map.append('red')
+    elif number_of_peaks == 1:
+        peak_colour_map.append('black')
 
 # Plotting each method and their histograms (error size vs frequency)
 ax[0].hist(frms_data, bins=50, label='FRMS')
@@ -847,15 +1169,148 @@ for i in range(len(removed_runs)):
         cut_runs_2.append(i)
 
 cut_runs = np.append(cut_runs, cut_runs_2) # adding high error runs to flat runs
+cut_runs = np.append(cut_runs, cut_runs_3) # adding bimodal emission lines to high error runs
 cut_runs = np.unique(cut_runs) # removing duplicates
 
+# add to final results dictionary
+final_results['cut_runs'] = cut_runs
+final_results['peak_colour_map'] = peak_colour_map
+
 # TODO Cut out runs where gaussian continuum very different to sklearn continuum
+
+
+
+# %%
+# store the results into an npy file
+np.save(f'final_results_inc_col_{inclination_column}.npy', final_results)
+
+# %%
+################################################################################
+print("STEP 10.5: INDIVIDUAL PLOTTING THE EW EXCESSES FOR ALL RUNS AGAINST TEO'S DATA")
+################################################################################
+
+
+# EVERY RUN IS PLOTTED HERE FOR THE EQUIVALENT WIDTH EXCESSES, NO BAD FITS REMOVED
+# YOU CAN POTENTIALLY SKIP THIS STEP IF YOU WANT TO REMOVE BAD FITS STRAIGHT AWAY.
+
+%matplotlib inline
+cut_red_ew_excess = np.delete(final_results['red_ew_excess'], cut_runs)
+cut_blue_ew_excess = np.delete(final_results['blue_ew_excess'], cut_runs)
+cut_red_ew_excess_error = np.delete(final_results['red_ew_excess_error'], cut_runs)
+cut_blue_ew_excess_error = np.delete(final_results['blue_ew_excess_error'], cut_runs)
+cut_peak_colour_map = np.delete(peak_colour_map, cut_runs)
+#cut_sk_con_data = np.delete(final_results['sk_con_data'], cut_runs)
+cut_grid = [i for j, i in enumerate(final_results['grid']) if j not in cut_runs]
+cut_grid_length = np.delete(grid_length, cut_runs)
+
+
+# %%
+# TODO FIGURE 4
+# loading Teo's data from csv files
+bz_cam = np.loadtxt('Cuneo_2023_data/BZ Cam.csv', delimiter=',') 
+mv_lyr = np.loadtxt('Cuneo_2023_data/MV Lyr.csv', delimiter=',')
+v425_cas = np.loadtxt('Cuneo_2023_data/V425 Cas.csv', delimiter=',')
+v751_cyg = np.loadtxt('Cuneo_2023_data/V751 Cyg.csv', delimiter=',')
+
+# plot concentric circles of a given radius
+def circle(radius):
+    theta = np.linspace(0, 2 * np.pi, 150)
+    a = radius * np.cos(theta)
+    b = radius * np.sin(theta)
+    return (a, b)
+
+# Create masks for single-peaked and double-peaked spectra
+cut_peak_colour_map = np.array(cut_peak_colour_map)  # ensure it's an array
+single_peak_mask = cut_peak_colour_map == 'black'
+double_peak_mask = cut_peak_colour_map == 'red'
+
+plt.figure(figsize=(7,7))
+plt.rcParams.update({'font.size': 15})
+ranges = slice(0,-1) # to select particular portions of the grid if desired
+plt.errorbar(cut_red_ew_excess,
+             cut_blue_ew_excess, 
+             xerr=cut_red_ew_excess_error, 
+             yerr=cut_blue_ew_excess_error, 
+             fmt='none', 
+             ecolor = 'grey', 
+             alpha=0.5,
+             zorder=-1
+             ) # error bars for scatterplot below
+
+# Plot double-peaked spectra
+plt.scatter(cut_red_ew_excess[double_peak_mask],
+            cut_blue_ew_excess[double_peak_mask],
+            c='red',
+            s=10,
+            label='Double-peaked Spectra')
+
+# Plot single-peaked spectra
+plt.scatter(cut_red_ew_excess[single_peak_mask],
+            cut_blue_ew_excess[single_peak_mask],
+            c='black',
+            s=10,
+            label='Single-peaked Spectra')
+
+kde = KernelDensity(bandwidth=0.2, kernel='gaussian')
+kde.fit(np.vstack([cut_red_ew_excess[double_peak_mask], cut_blue_ew_excess[double_peak_mask]]).T)
+
+xcenters = np.linspace(min(cut_red_ew_excess)-2, max(cut_red_ew_excess)+2, 500)
+ycenters = np.linspace(min(cut_blue_ew_excess)-2, max(cut_blue_ew_excess)+2, 500)
+X, Y = np.meshgrid(xcenters, ycenters)
+xy_sample = np.vstack([X.ravel(), Y.ravel()]).T
+Z = np.exp(kde.score_samples(xy_sample)).reshape(X.shape)
+
+contour_list = np.exp(np.arange(-3.0, 2.5, 0.5))
+plt.contourf(X, Y, Z, levels=contour_list, cmap='Grays', alpha=0.6)
+plt.contour(X, Y, Z, levels=contour_list, colors='red')
+
+# plot all teos data as the same scatter plot
+# plt.scatter(bz_cam[:,0], bz_cam[:,1], label='Cúneo et al. (2023)', color='blue', s=10, marker='o')
+# plt.scatter(mv_lyr[:,0], mv_lyr[:,1], color='blue', s=10, marker='o')
+# plt.scatter(v425_cas[:,0], v425_cas[:,1], color='blue', s=10, marker='o')
+# plt.scatter(v751_cyg[:,0], v751_cyg[:,1], color='blue', s=10, marker='o')
+
+#TODO Verify references WE have 20 or 45 degrees Binary.period(hr) 3.2
+    # 1.	BZ Cam: 12°–40° (References: Ringwald & Naylor 1998; Honeycutt et al. 2013) Binary.period(hr) 3.685
+    # 2.	V751 Cyg: <50° (References: Greiner et al. 1999; Patterson et al. 2001) Binary.period(hr) 3.467
+    # 3.	MV Lyr: 10°–13° (Skillman et al. 1995); 7° ± 1° (Linnell et al. 2005) Binary.period(hr) 3.2
+    # 4.	V425 Cas: 25° ± 9° (Shafter & Ulrich 1982; Ritter & Kolb 2003) Binary.period(hr) 3.6
+
+# vertical and horizontal lines at 0 i.e axes
+plt.axvline(x=0, color='black', linestyle='--', alpha=0.5, zorder = 1)
+plt.axhline(y=0, color='black', linestyle='--', alpha=0.5, zorder = 1)
+
+# plot formatting
+incs = [0 for i in range(10)] # to indent incs to the same column index as files
+[incs.append(i) for i in [20,45,60,72.5,85]] # inclinations from PYTHON models
+
+plt.xlabel('Red Wing EW Excess ($Å$)')
+plt.ylabel('Blue Wing EW Excess ($Å$)')
+plt.title(f'Red vs Blue Wing Excess at {incs[inclination_column]}° inclination')
+# sigma clip the data to remove outliers
+max_red = np.mean(cut_red_ew_excess) + 3*np.std(cut_red_ew_excess)
+min_red = np.mean(cut_red_ew_excess) - 3*np.std(cut_red_ew_excess)
+max_blue = np.mean(cut_blue_ew_excess) + 3*np.std(cut_blue_ew_excess)
+min_blue = np.mean(cut_blue_ew_excess) - 3*np.std(cut_blue_ew_excess)
+# plt.xlim(min_red,max_red)
+# plt.ylim(min_blue,max_blue)
+plt.xlim(-10,10)
+plt.ylim(-10,10)
+plt.xscale('symlog')
+plt.yscale('symlog')
+
+# plt.xlim(min(cut_red_ew_excess)-2,max(cut_red_ew_excess)+2)
+# plt.ylim(min(cut_blue_ew_excess)-2,max(cut_blue_ew_excess)+2)
+plt.legend(loc='upper left')
+plt.show()
+
 # %% 11
 ################################################################################
 print('STEP 11: REPLOTTING THE EW EXCESSES WITHOUT THE CUT RUNS')
 ################################################################################
 
 %matplotlib qt
+#import sns
 
 incs = [0 for i in range(10)] # to indent incs to the same column index as files
 [incs.append(i) for i in [20,45,60,72.5,85]] # inclinations from PYTHON models
@@ -883,13 +1338,13 @@ sim_parameters = [r'$\dot{M}_{disk}$',
 parameter_table = np.delete(parameter_table, 0, 1)
 
 # removing bad and flat fits from the data for the final plot of the EW excesses
-cut_red_ew_excess = np.delete(final_results['red_ew_excess'], cut_runs)
-cut_blue_ew_excess = np.delete(final_results['blue_ew_excess'], cut_runs)
-cut_red_ew_excess_error = np.delete(final_results['red_ew_excess_error'], cut_runs)
-cut_blue_ew_excess_error = np.delete(final_results['blue_ew_excess_error'], cut_runs)
-#cut_sk_con_data = np.delete(final_results['sk_con_data'], cut_runs)
-cut_grid = [i for j, i in enumerate(final_results['grid']) if j not in cut_runs]
-cut_grid_length = np.delete(grid_length, cut_runs)
+# cut_red_ew_excess = np.delete(final_results['red_ew_excess'], cut_runs)
+# cut_blue_ew_excess = np.delete(final_results['blue_ew_excess'], cut_runs)
+# cut_red_ew_excess_error = np.delete(final_results['red_ew_excess_error'], cut_runs)
+# cut_blue_ew_excess_error = np.delete(final_results['blue_ew_excess_error'], cut_runs)
+# #cut_sk_con_data = np.delete(final_results['sk_con_data'], cut_runs)
+# cut_grid = [i for j, i in enumerate(final_results['grid']) if j not in cut_runs]
+# cut_grid_length = np.delete(grid_length, cut_runs)
 
 # Loading Teo's data from csv files
 bz_cam = np.loadtxt('Cuneo_2023_data/BZ Cam.csv', delimiter=',') 
@@ -1020,17 +1475,41 @@ def init_plot():
                    ) # error bars for scatterplot below
     target = ax[0].scatter(cut_red_ew_excess,
                         cut_blue_ew_excess, 
-                        c=cut_grid_length,
+                        #c=cut_grid_length,
                         s=15,
                         label='Grid Data',
-                        cmap='rainbow', 
+                        color='blue',
+                        #cmap='rainbow', 
                         zorder=3
                         ) # scatter plot assigned as target for colour bar
-    plt.colorbar(target, label='Run Number', ax=ax[0], pad=0.1) # colour bar
+    #plt.colorbar(target, label='Run Number', ax=ax[0], pad=0.1) # colour bar
     ax[0].scatter(bz_cam[:,0], bz_cam[:,1], label='BZ Cam', color='black', s=10, marker='v')
     ax[0].scatter(mv_lyr[:,0], mv_lyr[:,1], label='MV Lyr', color='black', s=10, marker='^')
     ax[0].scatter(v425_cas[:,0], v425_cas[:,1], label='V425 Cas', color='black', s=10, marker='<')
     ax[0].scatter(v751_cyg[:,0], v751_cyg[:,1], label='V751 Cyg', color='black', s=10, marker='>')
+    #contour plot a kernel density estimate of the data
+    # # Create a 2D histogram with a density plot using matplotlib
+    # kde = KernelDensity(bandwidth=0.1, kernel='gaussian')
+    # kde.fit(np.vstack([cut_red_ew_excess, cut_blue_ew_excess]).T)
+    
+    # xcenters = np.linspace(min(cut_red_ew_excess), max(cut_red_ew_excess), 100)
+    # ycenters = np.linspace(min(cut_blue_ew_excess), max(cut_blue_ew_excess), 100)
+    # X, Y = np.meshgrid(xcenters, ycenters)
+    # xy_sample = np.vstack([X.ravel(), Y.ravel()]).T
+    # Z = np.exp(kde.score_samples(xy_sample)).reshape(X.shape)
+    
+    #ax[0].contourf(X, Y, Z, cmap='Blues', alpha=0.6)
+    #ax[0].contour(X, Y, Z, colors='Blue')
+    # ax[0].contourf(X, Y, Z, levels=contour_list, cmap='Grays', alpha=0.6)
+    # ax[0].contour(X, Y, Z, levels=contour_list, colors='black')
+    # hist, xedges, yedges = np.histogram2d(cut_red_ew_excess, cut_blue_ew_excess, bins=20, density=True)
+    # xcenters = (xedges[:-1] + xedges[1:]) / 2
+    # ycenters = (yedges[:-1] + yedges[1:]) / 2
+    # X, Y = np.meshgrid(xcenters, ycenters)
+    
+    # Plot the density plot
+    # ax[0].contourf(X, Y, hist.T, cmap='Blues', alpha=0.6)
+    # ax[0].contour(X, Y, hist.T, colors='blue')
     # plot formatting
     ax[0].set_xlabel('Red Wing EW Excess ($Å$)')
     ax[0].set_ylabel('Blue Wing EW Excess ($Å$)')
@@ -1113,28 +1592,17 @@ anim = FuncAnimation(fig,
                      ) # setting up animation
 anim.running = True # setting off animation
 
+# %%
+import pandas as pd
+single_peaks = pd.read_csv('Sorted_Wind_Parameters_Table.csv', delimiter=',')
+
 # %% 12 TRENDS
 ################################################################################
 print('STEP 12: FINDING TRENDS IN THE DATA')
 ################################################################################
-# module imports for all trends sections
-from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
-from sklearn.linear_model import LinearRegression
-from sklearn.linear_model import Ridge
-from sklearn.linear_model import Lasso
-from sklearn.model_selection import train_test_split
-from sklearn.model_selection import cross_val_score
-from sklearn.model_selection import cross_val_predict
-from sklearn.feature_selection import RFE
-from sklearn.neural_network import MLPRegressor
-from IPython.display import display, Math, Latex, Markdown
-import statsmodels.api as sm
-import scipy.stats as stats
-import pandas as pd
-import datetime
-import os
 
+# first row is column names
+single_peaks = pd.read_csv('Sorted_Wind_Parameters_Table.csv', delimiter=',')
 # Make a plots folder with todaydate and inc in the name
 today = datetime.date.today()
 today = today.strftime("%d-%m-%Y")
@@ -1330,15 +1798,25 @@ corr = X.corr(method='spearman')
 corr = corr.loc[['Blue EW Excess', 'Red EW Excess'], :] 
 
 # plot the correlation matrix
-ax = plt.axes()
+fig, ax = plt.subplots()
 im = ax.imshow(corr, cmap="bwr", vmin=-1, vmax=1) # matrix (-1/1 for colorbar)
-plt.colorbar(im).ax.set_ylabel("$r$", rotation=0) # adding colorbar
+
+# Set the colorbar horizontally above the matrix
+cbar = fig.colorbar(im, ax=ax, orientation='horizontal', pad=0.3)
+cbar.ax.set_xlabel("$r$", rotation=0)
+
 ax.set_xticks([0, 1, 2, 3, 4, 5, 6, 7]) # column parameters
 ax.set_xticklabels(list(feature_names), rotation=90)
 ax.set_yticks([0, 1]) # only red, blue excess rows
 ax.set_yticklabels(['Blue EW Excess', 'Red EW Excess'])
 ax.grid(False) # hide the grid lines
-ax.set_title(f"A correlation matrix at {incs[inclination_column]} inc")
+ax.set_title(f"Spearman Correlation Matrix at {incs[inclination_column]}° inclination")
+
+# Adding the correlation values to the squares
+for i in range(corr.shape[0]):
+    for j in range(corr.shape[1]):
+        ax.text(j, i, f"{corr.iloc[i, j]:.2f}", ha='center', va='center', color='black')
+
 plt.tight_layout()
 plt.savefig(f'{folder_name}/correlation_matrix.png', dpi=300)
 plt.show()
@@ -1688,9 +2166,10 @@ plt.show()
 
 # %% Calc EWs
 ################################################################################
-print('TRENDS: CALCULATING EQUIVALENT WIDTHS OF THE LINES')
+print('TRENDS: CALCULATING EQUIVALENT WIDTHS/FWHM OF THE LINES')
 ################################################################################
 %matplotlib inline
+
 
 # At this point, excesses seem to be a waste of time. There isn't strong 
 # regression relations, red/blue wing correlations and the diagnostic plots
@@ -1734,6 +2213,30 @@ def equivalent_width(wavelengths, fluxes, continuum, colour) -> list:
         
     equivalent_width = np.trapz((fluxes/continuum)-1, wavelengths)
     return equivalent_width
+
+# %%
+def full_width_half_maximum(wavelengths, fluxes, continuum, double_peak=False) -> list:
+    """Measuring the full width half maximum of emission lines. As there are double
+    peaks, the outer half maximum is measured and the internal dips ignored. 
+    """
+    H_alpha = 6562.819
+    fwhm = 0
+    wavelengths = np.array(wavelengths)
+    fluxes = np.array(fluxes)
+    continuum = np.array(continuum)
+    
+    # remove trend from the continuum
+    fluxes -= continuum
+    peak = np.max(fluxes)
+    
+    # two different regimes if line indicates double peak or single peak
+    if double_peak:
+        pass
+    else:
+        pass
+    
+    return fwhm # angstroms
+
 
 test_run = 470
 test_data_blue = equivalent_width(final_results['wavelength_grid'][test_run],
@@ -2479,19 +2982,20 @@ def angstrom_to_kms(wavelength):
     Args:
         wavelength (float): wavelength in angstroms"""
     kms = (wavelength - H_alpha) * 299792.458 / H_alpha
-    return print(f'{wavelength}Å = {kms}km/s')
+    return kms, print(f'{wavelength}Å = {kms}km/s')
     
 def kms_to_angstrom(velocity):
     """Converts velocity in km/s to wavelength in angstroms from central h_alpha line.
     Args:
         velocity (float): velocity in km/s"""  
     angstrom = H_alpha * (velocity / 299792.458) + H_alpha
-    return print(f'{velocity}km/s = {angstrom}Å')
+    return angstrom, print(f'{velocity}km/s = {angstrom}Å')
 
 print(H_alpha)
-kms_to_angstrom(1000) #22Å
-kms_to_angstrom(4000) #54Å(2500) 88Å(4000)
+a = kms_to_angstrom(1000) #22Å
+kms_to_angstrom(4100) #54Å(2500) 88Å(4000)
 
+print(H_alpha - kms_to_angstrom(1100)[0])
 ################################################################################
 print('END OF CODE')
 ################################################################################
