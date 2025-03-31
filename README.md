@@ -1,6 +1,6 @@
-# CV_Asymmetries_Paper_2024
+# CV_Asymmetries_Paper_2025
 
-This is a open research store for my CV asymmetries paper 2024 {link to be added}. 
+This is a open research store for my CV asymmetries paper 2025 {link to be added}. 
 The Emission_Line_Asymmetries.py script is not designed to be run straight as a python file. I operate the script like a juypter notebook by using vscode, Ipykernal and magic commands (# %%). This is why the python script is sectioned. The user should run the script-notebook in a similar format. This code isn't indented for production, only for paper reproducibility.  
 
 ChatGPT summary of the paper below:
