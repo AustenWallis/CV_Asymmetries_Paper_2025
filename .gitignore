@@ -11,3 +11,10 @@ Emission_Line_Asymmetries/22_55_mask
 Emission_Line_Asymmetries/22_88_mask
 Emission_Line_Asymmetries/22_90_mask
 Emission_Line_Asymmetries/24_55_mask
+old_code
+Emission_Line_Asymmetries/molly_spectra.npy
+Emission_Line_Asymmetries/AWDs_spec/
+Sirocco_cv_grid_masters
+Emission_Line_Asymmetries/*/
+.idea
+.vscode
