@@ -50,5 +50,9 @@ Their findings show that wind-driven emission alone can populate nearly any part
 ### Sirocco Model Access:
 - You can request grids from the Authors or generate your own with Sirocco. Sirocco (formally Python) v87f was used. Bare in mind if generating your own data, Sirocco uses Monte Carlo processes, therefore your results may vary verys slightly. A python script (dynamic_grid.py) is available in this repository to generate the .pf files required to run matching sirocco models.
 
+
+https://github.com/user-attachments/assets/59b1e52d-baee-4638-be8b-06536274acb6
+
+
 ### Cueno Data Access: 
 Although we do have this data, this should be requested from the original authors. 
