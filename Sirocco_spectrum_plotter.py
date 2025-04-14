@@ -30,7 +30,7 @@ import scienceplots
 import pandas as pd
 #import pysi
 
-#plt.style.use('science')
+plt.style.use('science')
 
 #plt.style.use('Solarize_Light2')
 # %%
@@ -344,10 +344,10 @@ for axis, run_num in enumerate(run_nums):
 # Add a text box with the word inclination to the top of the figure
 
 fig.text(0.27, 0.9085, 'Inclinations:', ha='center', fontsize=22)
-fig.text(0.14, 0.83, '(A)', fontsize=40)
-fig.text(0.564, 0.83, '(B)', fontsize=40)
-fig.text(0.14, 0.41, '(C)', fontsize=40)
-fig.text(0.564, 0.41, '(D)', fontsize=40)
+fig.text(0.14, 0.83, '(a)', fontsize=40)
+fig.text(0.564, 0.83, '(b)', fontsize=40)
+fig.text(0.14, 0.41, '(c)', fontsize=40)
+fig.text(0.564, 0.41, '(d)', fontsize=40)
 
 fig.legend(loc='upper center', bbox_to_anchor=(0.54, 0.94), ncol=5, fontsize=22)
 

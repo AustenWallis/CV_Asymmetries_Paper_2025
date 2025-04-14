@@ -199,8 +199,8 @@ for idx, inclination_column in enumerate(inclination_columns):
 labels.append('Linear/Logarithmic Threshold')
 handles.append(Line2D([0], [0], color='black', linestyle='--', linewidth=2.0))
 
-fig.text(0.88, 0.32, 
-        '$1000-2500 kms^{-1}$ Masking Window', 
+fig.text(0.895, 0.32, 
+        '$\pm\,1000-2500\,km\,s^{-1}$ Masking Window',  #change for mask
         #transform=ax2.transAxes, 
         fontsize=15, 
         bbox=dict(boxstyle='round', facecolor='white', alpha=0.5, edgecolor='grey'),
@@ -1054,8 +1054,8 @@ for idx, inclination_column in enumerate(inclination_columns):
 labels.append('Linear/Logarithmic Threshold')
 handles.append(Line2D([0], [0], color='black', linestyle='--', linewidth=2.0))
 
-fig.text(0.88, 0.32, 
-        '$1000-2500 kms^{-1}$ Masking Window', 
+fig.text(0.895, 0.32, 
+        '$\pm\,1000-2500\,km\,s^{-1}$ Masking Window', 
         #transform=ax2.transAxes, 
         fontsize=15, 
         bbox=dict(boxstyle='round', facecolor='white', alpha=0.5, edgecolor='grey'),
@@ -1138,7 +1138,7 @@ print('# in Lower right quadrant:', len(q4))
 
 # Set a seed for reproducibility if desired
 #seed = np.random.choice(np.arange(1, 1000, 1))
-seed = 103
+seed = 103 # for paper
 #seed = 0
 print('seed:', seed)
 np.random.seed(seed)
@@ -1151,7 +1151,7 @@ def sample_runs(runs, n=10):
     else:
         return runs
 
-keep_samples = sample_runs(q1, 135) + sample_runs(q2, 10) + sample_runs(q3, 10) + sample_runs(q4, 10)
+keep_samples = sample_runs(q1, 20) + sample_runs(q2, 10) + sample_runs(q3, 10) + sample_runs(q4, 10)
 keep_samples = np.array(keep_samples)
 
 # Define cut_runs as those runs NOT chosen
@@ -1160,7 +1160,7 @@ cut_runs = np.array([i for i in range(729) if i not in keep_samples])
 print("Selected runs:", keep_samples)
 
 colours = ['red', 'black', 'blue']
-mask_labels = ['$800-2500kms^{-1}$', '$1000-2500kms^{-1}$', '$1200-2500kms^{-1}$']
+mask_labels = ['$\pm\,800-2500\,km\,s^{-1}$', '$\pm\,1000-2500\,km\,s^{-1}$', '$\pm\,1200-2500\,km\,s^{-1}$']
 
 # For one of the masks (here the second mask) we plot error bars for context
 for i, mask in enumerate(masks):
@@ -1727,6 +1727,14 @@ fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 6))
 not_relevant_runs_linear = np.delete(~relevent_runs[inclination], remove_negative_ews)
 relevent_runs_linear = np.delete(relevent_runs[inclination], remove_negative_ews)
 
+a=0.03
+b=1.91
+c=0.02
+d=0.75
+e=1.14
+f=0.61
+g=59.56
+test_EM = a*log_X_all[:,0] + b*log_X_all[:,1] + c*log_X_all[:,2] + d*log_X_all[:,3] + e*log_X_all[:,4] + f*log_X_all[:,5] + g
 
 h1 = ax1.scatter(log_em[not_relevant_runs_linear], predicted_log_Y_all_ols[not_relevant_runs_linear], alpha=0.5, c='navy')
 h2 = ax1.scatter(log_em[relevent_runs_linear], predicted_log_Y_all_ols[relevent_runs_linear], alpha=0.5, c='#00AE15')
@@ -1747,6 +1755,7 @@ ax1.text(-0.255, 0.05,
         bbox=dict(boxstyle='round', facecolor='white', alpha=0.5, edgecolor='grey'),
         ha='right', 
         va='bottom')
+ax1.scatter(log_em, test_EM, alpha=0.5, c='orange', label='Test EM')
 ax1.legend()
 # Right subplot: Curve-of-Growth fit on linear data using a log-log plot
 
