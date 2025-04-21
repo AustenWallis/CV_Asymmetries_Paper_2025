@@ -49,7 +49,7 @@ Their findings show that wind-driven emission alone can populate nearly any part
         identified by Ed on ~Jan 24. Shown to have no (or negligible) effects on the grids I am using.
 
 ### Sirocco Model Access:
-- You can request grids from the Authors or generate your own with Sirocco. Sirocco (formally Python) v87f was used. Bare in mind if generating your own data, Sirocco uses Monte Carlo processes, therefore your results may vary verys slightly. A python script (dynamic_grid.py) is available in this repository to generate the .pf files required to run matching sirocco models.
+- 729 spectra files can be found under the 'Release_Ha_grid_spec_files' folder. Sirocco (formally Python) v87f was used. Bare in mind if generating your own data, Sirocco uses Monte Carlo processes, therefore your results may vary verys slightly. A python script (dynamic_grid.py) is available in this repository to generate the .pf files required to run matching sirocco models. The template pf files used to generate the models is under 'Template_pf_files'.
 
 
 https://github.com/user-attachments/assets/59b1e52d-baee-4638-be8b-06536274acb6
