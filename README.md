@@ -1,4 +1,5 @@
 # CV_Asymmetries_Paper_2025
+[![DOI](https://zenodo.org/badge/767447082.svg)](https://doi.org/10.5281/zenodo.15257396)
 
 This is a open research store for my CV asymmetries paper 2025 {link to be added}. 
 The Emission_Line_Asymmetries.py script is not designed to be run straight as a python file. I operate the script like a juypter notebook by using vscode, Ipykernal and magic commands (# %%). This is why the python script is sectioned. The user should run the script-notebook in a similar format. This code isn't indented for production, only for paper reproducibility.  
