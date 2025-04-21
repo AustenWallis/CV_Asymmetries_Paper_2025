@@ -1,4 +1,4 @@
-# CV_Asymmetries_Paper_2025
+# CV Asymmetries Paper 2025
 [![DOI](https://zenodo.org/badge/767447082.svg)](https://doi.org/10.5281/zenodo.15257396)
 
 This is a open research store for my CV asymmetries paper 2025 {link to be added}. 
