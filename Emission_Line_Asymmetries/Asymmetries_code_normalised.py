@@ -91,8 +91,8 @@ inclination_column = 10 # 10-14 = 20,45,60,72.5,85
 grid_mixed = True # if grid is mixed, set to True to rerun the script at difference wavelength ranges
                   # you can change the wavelength range in the second input below.
 # Be sensible with intervals or you'll break code. (near peak first, far peak second)
-blue_peak_mask = (24,55) # number of angstroms to cut around the peak, blue minus.
-red_peak_mask = (24,55) # number of angstroms to cut around the peak, red plus.
+blue_peak_mask = (22,55) # number of angstroms to cut around the peak, blue minus.
+red_peak_mask = (22,55) # number of angstroms to cut around the peak, red plus.
 #spectra_normalised = False # if the spectra are normalised, set to True
 # --------------------- #
 H_alpha = 6562.819
@@ -260,7 +260,7 @@ def gaussian_with_continuum(w, amp, mu, sigma, m, b, run):
     Returns:
         fit (np.array): The gaussian and continuum theoretical fit
     """
-    #mu = H_alpha # fixing Halpha
+    mu = H_alpha # fixing Halpha
     
     
     const = amp * (1.0 / (np.fabs(sigma)*(2*np.pi)**0.5))
@@ -800,8 +800,8 @@ if i_want_to_view_the_fits:
         ax.axvline(x=H_alpha -22, color='black', linestyle='--', alpha=0.5)
         ax.set_xlabel('Wavelength ($Å$)')
         ax.set_ylabel('Flux')
-        ax.set_xlim(6385, 6735)
-        ax.set_title(f'Run {run_number[int(val)]}: Gaussian and Continuum \n Sum Squared = {sum_squared:.2e}')
+        ax.set_xlim(6450, 6650)
+        ax.set_title(f'Run {run_numbers[int(val)]}: Gaussian and Continuum \n Sum Squared = {sum_squared:.2e}')
         ax.legend()
         fig.canvas.draw_idle()
 

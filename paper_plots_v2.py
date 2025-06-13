@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 from scipy.ndimage import gaussian_filter1d
-from matplotlib.ticker import SymmetricalLogLocator
+from matplotlib.ticker import SymmetricalLogLocator # from matplotlib.scale import SymmetricalLogLocator
 from matplotlib.lines import Line2D
 import scienceplots
 from sklearn.neighbors import KernelDensity
@@ -23,7 +23,9 @@ import scipy.optimize as opt
 # import gaussian smoothing 1d
 from scipy.integrate import quad
 import itertools
-
+from scipy.optimize import curve_fit
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+dpi = 300
 plt.style.use('science')
 
 all_results = {}
@@ -31,204 +33,389 @@ inclination_columns = [10,11,12,13,14]
 #inclination_columns = [11]  # 45° inclination
 mask = '22_55_mask' # 11-88 = 500-4000, 22-88 = 1000-4000, 22-55 = 1000-2500, 22-90 = 1000-4100
 for inclination_column in tqdm(inclination_columns):
-    if os.path.exists(f'Emission_Line_Asymmetries/new_data/{mask}/final_results_inc_col_{inclination_column}.npy'):
-        all_results[inclination_column] = np.load(f'Emission_Line_Asymmetries/new_data/{mask}/final_results_inc_col_{inclination_column}.npy', allow_pickle=True).item()
+    if os.path.exists(f'Emission_Line_Asymmetries/final_data/{mask}/final_results_inc_col_{inclination_column}.npy'):
+        all_results[inclination_column] = np.load(f'Emission_Line_Asymmetries/final_data/{mask}/final_results_inc_col_{inclination_column}.npy', allow_pickle=True).item()
 
-# %% APPENDIX 1/2 LARGE- LOW, MEDIUM, HIGH INCLINATION DIAGNOSTIC PLOTS
+#mask = '22_55_mask' # 11-88 = 500-4000, 22-88 = 1000-4000, 22-55 = 1000-2500, 22-90 = 1000-4100
+# for inclination_column in tqdm(inclination_columns):
+#     if os.path.exists(f'Emission_Line_Asymmetries/mean_free_parameter_22_55/final_results_inc_col_{inclination_column}.npy'):
+#         all_results[inclination_column] = np.load(f'Emission_Line_Asymmetries/mean_free_parameter_22_55/final_results_inc_col_{inclination_column}.npy', allow_pickle=True).item()
+# %% APPENDIX B1/B2 LARGE- LOW, MEDIUM, HIGH INCLINATION DIAGNOSTIC PLOTS
 ################################################################################
 print('APPENDIX 1/2: LOW, MEDIUM, HIGH INCLINATION DIAGNOSTIC PLOTS')
 ################################################################################
 
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
-from matplotlib.scale import SymmetricalLogLocator
+if mask == '22_55_mask':
+    # Define inclination columns and incs
+    inclination_columns = [10, 11, 12, 13, 14]  # 20°, 45°, 60°, 72.5°, 85°
+    incs = [0 for _ in range(10)]  # to align indices
+    incs.extend([20, 45, 60, 72.5, 85])  # inclinations from models
 
-# Define inclination columns and incs
-inclination_columns = [10, 11, 12, 13, 14]  # 20°, 45°, 60°, 72.5°, 85°
-incs = [0 for _ in range(10)]  # to align indices
-incs.extend([20, 45, 60, 72.5, 85])  # inclinations from models
+    # Create the figure and a 2×3 grid of subplots
+    fig, axs = plt.subplots(2, 3, figsize=(15, 10), sharex=False, sharey=True)
+    axs = axs.flatten()
 
-# Create the figure and a 2×3 grid of subplots
-fig, axs = plt.subplots(2, 3, figsize=(15, 10), sharex=False, sharey=True)
-axs = axs.flatten()
+    # Remove the unused 6th subplot
+    fig.delaxes(axs[5])
+    plt.rcParams.update({'font.size': 15})
 
-# Remove the unused 6th subplot
-fig.delaxes(axs[5])
-plt.rcParams.update({'font.size': 15})
+    # Load Teo's data once
+    bz_cam   = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/BZ Cam.csv',   delimiter=',')
+    mv_lyr   = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/MV Lyr.csv',   delimiter=',')
+    v425_cas = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/V425 Cas.csv', delimiter=',')
+    v751_cyg = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/V751 Cyg.csv', delimiter=',')
 
-# Load Teo's data once
-bz_cam   = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/BZ Cam.csv',   delimiter=',')
-mv_lyr   = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/MV Lyr.csv',   delimiter=',')
-v425_cas = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/V425 Cas.csv', delimiter=',')
-v751_cyg = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/V751 Cyg.csv', delimiter=',')
+    # Prepare legend handles
+    handles = []
+    labels = []
 
-# Prepare legend handles
-handles = []
-labels = []
+    for idx, inclination_column in enumerate(inclination_columns):
+        final_results = all_results[inclination_column]
+        cut_runs = final_results['cut_runs']
+        peak_colour_map = final_results['peak_colour_map']
+        grid_length = np.arange(0, 729)
+        print(f'Inclination:{inclination_columns},Number Removed:{len(cut_runs)}')
 
-for idx, inclination_column in enumerate(inclination_columns):
-    final_results = all_results[inclination_column]
-    cut_runs = final_results['cut_runs']
-    peak_colour_map = final_results['peak_colour_map']
-    grid_length = np.arange(0, 729)
+        cut_red_ew_excess = np.delete(final_results['red_ew_excess'], cut_runs)
+        cut_blue_ew_excess = np.delete(final_results['blue_ew_excess'], cut_runs)
+        cut_red_ew_excess_error = np.delete(final_results['red_ew_excess_error'], cut_runs)
+        cut_blue_ew_excess_error = np.delete(final_results['blue_ew_excess_error'], cut_runs)
+        cut_peak_colour_map = np.delete(peak_colour_map, cut_runs)
+        # Create masks for single-peaked and double-peaked spectra
+        cut_peak_colour_map = np.array(cut_peak_colour_map)  # ensure it's an array
+        # Boolean masks for single- vs double-peaked
+        single_mask = (cut_peak_colour_map == 'black')
+        double_mask = (cut_peak_colour_map == 'red')
 
-    cut_red_ew_excess = np.delete(final_results['red_ew_excess'], cut_runs)
-    cut_blue_ew_excess = np.delete(final_results['blue_ew_excess'], cut_runs)
-    cut_red_ew_excess_error = np.delete(final_results['red_ew_excess_error'], cut_runs)
-    cut_blue_ew_excess_error = np.delete(final_results['blue_ew_excess_error'], cut_runs)
-    cut_peak_colour_map = np.delete(peak_colour_map, cut_runs)
-    # Create masks for single-peaked and double-peaked spectra
-    cut_peak_colour_map = np.array(cut_peak_colour_map)  # ensure it's an array
-    # Boolean masks for single- vs double-peaked
-    single_mask = (cut_peak_colour_map == 'black')
-    double_mask = (cut_peak_colour_map == 'red')
+        ax = axs[idx]
+        #ax.set_axisbelow(True)
+        ax.grid(which='both', linestyle='--', linewidth=0.5, zorder=0)
 
-    ax = axs[idx]
-    #ax.set_axisbelow(True)
-    ax.grid(which='both', linestyle='--', linewidth=0.5, zorder=0)
-
-    # Plot error bars (all points together for simplicity)
-    ax.errorbar(
-        cut_red_ew_excess,
-        cut_blue_ew_excess,
-        xerr=cut_red_ew_excess_error,
-        yerr=cut_blue_ew_excess_error,
-        fmt='none',
-        ecolor='black',
-        alpha=0.7,
-        zorder=1
-    )
-
-    # Plot single-peaked (black) vs double-peaked (red)
-    # Add legend entries only in the first subplot
-    if idx == 0:
-        single_scatter = ax.scatter(
-            cut_red_ew_excess[single_mask],
-            cut_blue_ew_excess[single_mask],
-            c='red',
-            s=10,
-            label='Single-peaked Sirocco Spectra',
-            zorder=3,
-            alpha=0.7
-        )
-        double_scatter = ax.scatter(
-            cut_red_ew_excess[double_mask],
-            cut_blue_ew_excess[double_mask],
-            c='black',
-            s=10,
-            label='Double-peaked Sirocco Spectra',
-            zorder=2,
-            alpha=0.7
-        )
-        handles.append(single_scatter)
-        labels.append('Single-peaked Sirocco Spectra')
-        handles.append(double_scatter)
-        labels.append('Double-peaked Sirocco Spectra')
-    else:
-        ax.scatter(
-            cut_red_ew_excess[single_mask],
-            cut_blue_ew_excess[single_mask],
-            c='red',
-            s=10,
-            zorder=3,
-            alpha=0.7
-        )
-        ax.scatter(
-            cut_red_ew_excess[double_mask],
-            cut_blue_ew_excess[double_mask],
-            c='black',
-            s=10,
-            zorder=2,
-            alpha=0.7
+        # Plot error bars (all points together for simplicity)
+        ax.errorbar(
+            cut_red_ew_excess,
+            cut_blue_ew_excess,
+            xerr=cut_red_ew_excess_error,
+            yerr=cut_blue_ew_excess_error,
+            fmt='none',
+            ecolor='black',
+            alpha=0.7,
+            zorder=1
         )
 
-    # Only plot Teo’s data on the 45° inclination
-    # if inclination_column == 11:
-    #     teo_scatter = ax.scatter(bz_cam[:, 0], bz_cam[:, 1], color='red', s=10, marker='o', label='Cúneo et al. (2023)')
-    #     ax.scatter(mv_lyr[:, 0], mv_lyr[:, 1], color='red', s=10, marker='o')
-    #     ax.scatter(v425_cas[:, 0], v425_cas[:, 1], color='red', s=10, marker='o')
-    #     ax.scatter(v751_cyg[:, 0], v751_cyg[:, 1], color='red', s=10, marker='o')
-    #     handles.append(teo_scatter)
-    #     labels.append('Cúneo et al. (2023)')
+        # Plot single-peaked (black) vs double-peaked (red)
+        # Add legend entries only in the first subplot
+        if idx == 0:
+            single_scatter = ax.scatter(
+                cut_red_ew_excess[single_mask],
+                cut_blue_ew_excess[single_mask],
+                c='red',
+                s=10,
+                label='Single-peaked Sirocco Spectra',
+                zorder=3,
+                alpha=0.7
+            )
+            double_scatter = ax.scatter(
+                cut_red_ew_excess[double_mask],
+                cut_blue_ew_excess[double_mask],
+                c='black',
+                s=10,
+                label='Double-peaked Sirocco Spectra',
+                zorder=2,
+                alpha=0.7
+            )
+            handles.append(single_scatter)
+            labels.append('Single-peaked Sirocco Spectra')
+            handles.append(double_scatter)
+            labels.append('Double-peaked Sirocco Spectra')
+        else:
+            ax.scatter(
+                cut_red_ew_excess[single_mask],
+                cut_blue_ew_excess[single_mask],
+                c='red',
+                s=10,
+                zorder=3,
+                alpha=0.7
+            )
+            ax.scatter(
+                cut_red_ew_excess[double_mask],
+                cut_blue_ew_excess[double_mask],
+                c='black',
+                s=10,
+                zorder=2,
+                alpha=0.7
+            )
 
-    # Reference lines
-    ax.axvline(x=0, color='black', linestyle='--', alpha=0.5, zorder=1)
-    ax.axhline(y=0, color='black', linestyle='--', alpha=0.5, zorder=1)
+        # Only plot Teo’s data on the 45° inclination
+        # if inclination_column == 11:
+        #     teo_scatter = ax.scatter(bz_cam[:, 0], bz_cam[:, 1], color='red', s=10, marker='o', label='Cúneo et al. (2023)')
+        #     ax.scatter(mv_lyr[:, 0], mv_lyr[:, 1], color='red', s=10, marker='o')
+        #     ax.scatter(v425_cas[:, 0], v425_cas[:, 1], color='red', s=10, marker='o')
+        #     ax.scatter(v751_cyg[:, 0], v751_cyg[:, 1], color='red', s=10, marker='o')
+        #     handles.append(teo_scatter)
+        #     labels.append('Cúneo et al. (2023)')
 
-    # Dashed box for linear/log threshold
-    linear_thrs = 0.1
-    ax.plot(
-        [-linear_thrs, linear_thrs, linear_thrs, -linear_thrs, -linear_thrs],
-        [-linear_thrs, -linear_thrs, linear_thrs, linear_thrs, -linear_thrs],
-        color='black', linestyle='--', alpha=1.0, zorder=1, linewidth=2.0,
-        label='Linear/Logarithmic Threshold'
+        # Reference lines
+        ax.axvline(x=0, color='black', linestyle='--', alpha=0.5, zorder=1)
+        ax.axhline(y=0, color='black', linestyle='--', alpha=0.5, zorder=1)
+
+        # Dashed box for linear/log threshold
+        linear_thrs = 0.1
+        ax.plot(
+            [-linear_thrs, linear_thrs, linear_thrs, -linear_thrs, -linear_thrs],
+            [-linear_thrs, -linear_thrs, linear_thrs, linear_thrs, -linear_thrs],
+            color='black', linestyle='--', alpha=1.0, zorder=1, linewidth=2.0,
+            label='Linear/Logarithmic Threshold'
+        )
+        #linear threshold lines
+        ax.axvline(x=linear_thrs, color='black', linestyle='--', alpha=1.0, zorder=1)
+        ax.axvline(x=-linear_thrs, color='black', linestyle='--', alpha=1.0, zorder=1)
+        ax.axhline(y=-linear_thrs, color='black', linestyle='--', alpha=1.0, zorder=1)
+        ax.axhline(y=linear_thrs, color='black', linestyle='--', alpha=1.0, zorder=1)
+        
+        # ax.axvline(linear_thrs, -linear_thrs, linear_thrs, color='blue', linestyle='--', alpha=1.0, zorder=1)
+        # ax.axhline(-linear_thrs, -linear_thrs, linear_thrs, color='blue', linestyle='--', alpha=1.0, zorder=1)
+        # ax.axhline(linear_thrs, -linear_thrs, linear_thrs, color='blue', linestyle='--', alpha=1.0, zorder=1)
+        
+
+        # Axes formatting
+        ax.set_xlabel('Red Wing EW Excess ($\\mathring{A}$)')
+        # Put a y-label on the left column of subplots (idx=0 for top-left, idx=3 for bottom-left)
+        if idx in [0, 3]:
+            ax.set_ylabel('Blue Wing EW Excess ($\\mathring{A}$)')
+
+        ax.set_title(f'{incs[inclination_column]}° inclination')
+        ax.set_xlim(-30, 30)
+        ax.set_ylim(-30, 30)
+        ax.set_xscale('symlog', linthresh=linear_thrs)
+        ax.set_yscale('symlog', linthresh=linear_thrs)
+
+        # Minor tick locators for symlog
+        ax.xaxis.set_minor_locator(
+            SymmetricalLogLocator(linthresh=linear_thrs, base=10, subs=np.arange(1, 10))
+        )
+        ax.yaxis.set_minor_locator(
+            SymmetricalLogLocator(linthresh=linear_thrs, base=10, subs=np.arange(1, 10))
+        )
+
+    # Add final threshold handle/label
+    labels.append('Linear/Logarithmic Threshold')
+    handles.append(Line2D([0], [0], color='black', linestyle='--', linewidth=2.0))
+
+    fig.text(0.8975, 0.32, 
+            '$\pm\,1000-2500\,km\,s^{-1}$ Masking Window',  #change for mask
+            #transform=ax2.transAxes, 
+            fontsize=15, 
+            bbox=dict(boxstyle='round', facecolor='white', alpha=0.5, edgecolor='grey'),
+            ha='right', 
+            va='bottom')
+    #labels.append('$1000-2500 kms^{-1}$ Mask Window')
+    #handles.append(Line2D([0], [0], color='white', linestyle='-', linewidth=2.0))
+
+    # Adjust subplot spacing (both horizontally and vertically)
+    fig.subplots_adjust(wspace=0, hspace=0.15, top=0.88)
+
+    # Position the legend closer to the top
+    fig.legend(
+        handles, labels,
+        loc='lower right', ncol=1,
+        bbox_to_anchor=(0.9, 0.19)
     )
-    #linear threshold lines
-    ax.axvline(x=linear_thrs, color='black', linestyle='--', alpha=1.0, zorder=1)
-    ax.axvline(x=-linear_thrs, color='black', linestyle='--', alpha=1.0, zorder=1)
-    ax.axhline(y=-linear_thrs, color='black', linestyle='--', alpha=1.0, zorder=1)
-    ax.axhline(y=linear_thrs, color='black', linestyle='--', alpha=1.0, zorder=1)
-    
-    # ax.axvline(linear_thrs, -linear_thrs, linear_thrs, color='blue', linestyle='--', alpha=1.0, zorder=1)
-    # ax.axhline(-linear_thrs, -linear_thrs, linear_thrs, color='blue', linestyle='--', alpha=1.0, zorder=1)
-    # ax.axhline(linear_thrs, -linear_thrs, linear_thrs, color='blue', linestyle='--', alpha=1.0, zorder=1)
-    
 
-    # Axes formatting
-    ax.set_xlabel('Red Wing EW Excess ($\\mathring{A}$)')
-    # Put a y-label on the left column of subplots (idx=0 for top-left, idx=3 for bottom-left)
-    if idx in [0, 3]:
-        ax.set_ylabel('Blue Wing EW Excess ($\\mathring{A}$)')
+    # Manually reposition the bottom row subplots so they are centered
+    pos3 = axs[3].get_position()
+    pos4 = axs[4].get_position()
+    axs[3].set_position([0.125, pos3.y0-0.04, 0.26, pos3.height])  # shift bottom-left a bit to the right
+    axs[4].set_position([0.385, pos4.y0-0.04, 0.255, pos4.height])  # shift bottom-right a bit left
+    plt.savefig('plots/Appendix_22_55_mask', dpi=dpi)
+    plt.show()
 
-    ax.set_title(f'{incs[inclination_column]}° inclination')
-    ax.set_xlim(-30, 30)
-    ax.set_ylim(-30, 30)
-    ax.set_xscale('symlog', linthresh=linear_thrs)
-    ax.set_yscale('symlog', linthresh=linear_thrs)
+elif mask == '11_88_mask':
+        # Define inclination columns and incs
+    inclination_columns = [10, 11, 12, 13, 14]  # 20°, 45°, 60°, 72.5°, 85°
+    incs = [0 for _ in range(10)]  # to align indices
+    incs.extend([20, 45, 60, 72.5, 85])  # inclinations from models
 
-    # Minor tick locators for symlog
-    ax.xaxis.set_minor_locator(
-        SymmetricalLogLocator(linthresh=linear_thrs, base=10, subs=np.arange(1, 10))
+    # Create the figure and a 2×3 grid of subplots
+    fig, axs = plt.subplots(2, 3, figsize=(15, 10), sharex=False, sharey=True)
+    axs = axs.flatten()
+
+    # Remove the unused 6th subplot
+    fig.delaxes(axs[5])
+    plt.rcParams.update({'font.size': 15})
+
+    # Load Teo's data once
+    bz_cam   = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/BZ Cam.csv',   delimiter=',')
+    mv_lyr   = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/MV Lyr.csv',   delimiter=',')
+    v425_cas = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/V425 Cas.csv', delimiter=',')
+    v751_cyg = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/V751 Cyg.csv', delimiter=',')
+
+    # Prepare legend handles
+    handles = []
+    labels = []
+
+    for idx, inclination_column in enumerate(inclination_columns):
+        final_results = all_results[inclination_column]
+        cut_runs = final_results['cut_runs']
+        peak_colour_map = final_results['peak_colour_map']
+        grid_length = np.arange(0, 729)
+
+        cut_red_ew_excess = np.delete(final_results['red_ew_excess'], cut_runs)
+        cut_blue_ew_excess = np.delete(final_results['blue_ew_excess'], cut_runs)
+        cut_red_ew_excess_error = np.delete(final_results['red_ew_excess_error'], cut_runs)
+        cut_blue_ew_excess_error = np.delete(final_results['blue_ew_excess_error'], cut_runs)
+        cut_peak_colour_map = np.delete(peak_colour_map, cut_runs)
+        # Create masks for single-peaked and double-peaked spectra
+        cut_peak_colour_map = np.array(cut_peak_colour_map)  # ensure it's an array
+        # Boolean masks for single- vs double-peaked
+        single_mask = (cut_peak_colour_map == 'black')
+        double_mask = (cut_peak_colour_map == 'red')
+
+        ax = axs[idx]
+        #ax.set_axisbelow(True)
+        ax.grid(which='both', linestyle='--', linewidth=0.5, zorder=0)
+
+        # Plot error bars (all points together for simplicity)
+        ax.errorbar(
+            cut_red_ew_excess,
+            cut_blue_ew_excess,
+            xerr=cut_red_ew_excess_error,
+            yerr=cut_blue_ew_excess_error,
+            fmt='none',
+            ecolor='black',
+            alpha=0.7,
+            zorder=1
+        )
+
+        # Plot single-peaked (black) vs double-peaked (red)
+        # Add legend entries only in the first subplot
+        if idx == 0:
+            single_scatter = ax.scatter(
+                cut_red_ew_excess[single_mask],
+                cut_blue_ew_excess[single_mask],
+                c='red',
+                s=10,
+                label='Single-peaked Sirocco Spectra',
+                zorder=3,
+                alpha=0.7
+            )
+            double_scatter = ax.scatter(
+                cut_red_ew_excess[double_mask],
+                cut_blue_ew_excess[double_mask],
+                c='black',
+                s=10,
+                label='Double-peaked Sirocco Spectra',
+                zorder=2,
+                alpha=0.7
+            )
+            handles.append(single_scatter)
+            labels.append('Single-peaked Sirocco Spectra')
+            handles.append(double_scatter)
+            labels.append('Double-peaked Sirocco Spectra')
+        else:
+            ax.scatter(
+                cut_red_ew_excess[single_mask],
+                cut_blue_ew_excess[single_mask],
+                c='red',
+                s=10,
+                zorder=3,
+                alpha=0.7
+            )
+            ax.scatter(
+                cut_red_ew_excess[double_mask],
+                cut_blue_ew_excess[double_mask],
+                c='black',
+                s=10,
+                zorder=2,
+                alpha=0.7
+            )
+
+        # Only plot Teo’s data on the 45° inclination
+        # if inclination_column == 11:
+        #     teo_scatter = ax.scatter(bz_cam[:, 0], bz_cam[:, 1], color='red', s=10, marker='o', label='Cúneo et al. (2023)')
+        #     ax.scatter(mv_lyr[:, 0], mv_lyr[:, 1], color='red', s=10, marker='o')
+        #     ax.scatter(v425_cas[:, 0], v425_cas[:, 1], color='red', s=10, marker='o')
+        #     ax.scatter(v751_cyg[:, 0], v751_cyg[:, 1], color='red', s=10, marker='o')
+        #     handles.append(teo_scatter)
+        #     labels.append('Cúneo et al. (2023)')
+
+        # Reference lines
+        ax.axvline(x=0, color='black', linestyle='--', alpha=0.5, zorder=1)
+        ax.axhline(y=0, color='black', linestyle='--', alpha=0.5, zorder=1)
+
+        # Dashed box for linear/log threshold
+        linear_thrs = 0.1
+        ax.plot(
+            [-linear_thrs, linear_thrs, linear_thrs, -linear_thrs, -linear_thrs],
+            [-linear_thrs, -linear_thrs, linear_thrs, linear_thrs, -linear_thrs],
+            color='black', linestyle='--', alpha=1.0, zorder=1, linewidth=2.0,
+            label='Linear/Logarithmic Threshold'
+        )
+        #linear threshold lines
+        ax.axvline(x=linear_thrs, color='black', linestyle='--', alpha=1.0, zorder=1)
+        ax.axvline(x=-linear_thrs, color='black', linestyle='--', alpha=1.0, zorder=1)
+        ax.axhline(y=-linear_thrs, color='black', linestyle='--', alpha=1.0, zorder=1)
+        ax.axhline(y=linear_thrs, color='black', linestyle='--', alpha=1.0, zorder=1)
+        
+        # ax.axvline(linear_thrs, -linear_thrs, linear_thrs, color='blue', linestyle='--', alpha=1.0, zorder=1)
+        # ax.axhline(-linear_thrs, -linear_thrs, linear_thrs, color='blue', linestyle='--', alpha=1.0, zorder=1)
+        # ax.axhline(linear_thrs, -linear_thrs, linear_thrs, color='blue', linestyle='--', alpha=1.0, zorder=1)
+        
+
+        # Axes formatting
+        ax.set_xlabel('Red Wing EW Excess ($\\mathring{A}$)')
+        # Put a y-label on the left column of subplots (idx=0 for top-left, idx=3 for bottom-left)
+        if idx in [0, 3]:
+            ax.set_ylabel('Blue Wing EW Excess ($\\mathring{A}$)')
+
+        ax.set_title(f'{incs[inclination_column]}° inclination')
+        ax.set_xlim(-30, 30)
+        ax.set_ylim(-30, 30)
+        ax.set_xscale('symlog', linthresh=linear_thrs)
+        ax.set_yscale('symlog', linthresh=linear_thrs)
+
+        # Minor tick locators for symlog
+        ax.xaxis.set_minor_locator(
+            SymmetricalLogLocator(linthresh=linear_thrs, base=10, subs=np.arange(1, 10))
+        )
+        ax.yaxis.set_minor_locator(
+            SymmetricalLogLocator(linthresh=linear_thrs, base=10, subs=np.arange(1, 10))
+        )
+
+    # Add final threshold handle/label
+    labels.append('Linear/Logarithmic Threshold')
+    handles.append(Line2D([0], [0], color='black', linestyle='--', linewidth=2.0))
+
+    fig.text(0.89, 0.32, 
+            '$\pm\,500-4000\,km\,s^{-1}$ Masking Window',  #change for mask
+            #transform=ax2.transAxes, 
+            fontsize=15, 
+            bbox=dict(boxstyle='round', facecolor='white', alpha=0.5, edgecolor='grey'),
+            ha='right', 
+            va='bottom')
+    #labels.append('$1000-2500 kms^{-1}$ Mask Window')
+    #handles.append(Line2D([0], [0], color='white', linestyle='-', linewidth=2.0))
+
+    # Adjust subplot spacing (both horizontally and vertically)
+    fig.subplots_adjust(wspace=0, hspace=0.15, top=0.88)
+
+    # Position the legend closer to the top
+    fig.legend(
+        handles, labels,
+        loc='lower right', ncol=1,
+        bbox_to_anchor=(0.9, 0.19)
     )
-    ax.yaxis.set_minor_locator(
-        SymmetricalLogLocator(linthresh=linear_thrs, base=10, subs=np.arange(1, 10))
-    )
 
-# Add final threshold handle/label
-labels.append('Linear/Logarithmic Threshold')
-handles.append(Line2D([0], [0], color='black', linestyle='--', linewidth=2.0))
-
-fig.text(0.895, 0.32, 
-        '$\pm\,1000-2500\,km\,s^{-1}$ Masking Window',  #change for mask
-        #transform=ax2.transAxes, 
-        fontsize=15, 
-        bbox=dict(boxstyle='round', facecolor='white', alpha=0.5, edgecolor='grey'),
-        ha='right', 
-        va='bottom')
-#labels.append('$1000-2500 kms^{-1}$ Mask Window')
-#handles.append(Line2D([0], [0], color='white', linestyle='-', linewidth=2.0))
-
-# Adjust subplot spacing (both horizontally and vertically)
-fig.subplots_adjust(wspace=0, hspace=0.15, top=0.88)
-
-# Position the legend closer to the top
-fig.legend(
-    handles, labels,
-    loc='lower right', ncol=1,
-    bbox_to_anchor=(0.9, 0.19)
-)
-
-# Manually reposition the bottom row subplots so they are centered
-pos3 = axs[3].get_position()
-pos4 = axs[4].get_position()
-axs[3].set_position([0.125, pos3.y0-0.04, 0.26, pos3.height])  # shift bottom-left a bit to the right
-axs[4].set_position([0.385, pos4.y0-0.04, 0.255, pos4.height])  # shift bottom-right a bit left
-
-plt.show()
+    # Manually reposition the bottom row subplots so they are centered
+    pos3 = axs[3].get_position()
+    pos4 = axs[4].get_position()
+    axs[3].set_position([0.125, pos3.y0-0.04, 0.26, pos3.height])  # shift bottom-left a bit to the right
+    axs[4].set_position([0.385, pos4.y0-0.04, 0.255, pos4.height])  # shift bottom-right a bit left
+    plt.savefig('plots/Appendix_11_88_mask', dpi=dpi)
+    plt.show()
 
 
-# %% APPENDIX 3 - FWHM DIAGNOSTIC PLOTS
+# %% APPENDIX B3 - FWHM DIAGNOSTIC PLOTS
 ################################################################################
 print('APPENDIX 3: FWHM DIAGNOSTIC PLOTS')
 ################################################################################
@@ -367,6 +554,7 @@ pos3 = axs[3].get_position()
 pos4 = axs[4].get_position()
 axs[3].set_position([0.125, pos3.y0-0.04, 0.26, pos3.height])  # shift bottom-left a bit to the right
 axs[4].set_position([0.385, pos4.y0-0.04, 0.255, pos4.height])  # shift bottom-right a bit left
+plt.savefig('plots/Appendix_FWHM_mask', dpi=dpi)
 plt.show()
 
 # %% FIGURE 1 - THEORETICAL DIAGNOSTIC PLOTS
@@ -381,8 +569,8 @@ x = [-30, -30, 30, 30, -30, 0, 0, 30]
 y = [-30, 30, 30, -30, 0, -30, 30, 0]
 axs.scatter(x, y, color='black', marker='o')
 
-axs.set_xlabel('Red Wing EW Excess ($\mathring{A}$)')
-axs.set_ylabel('Blue Wing EW Excess ($\mathring{A}$)')
+axs.set_xlabel('Red Wing EW Excess')
+axs.set_ylabel('Blue Wing EW Excess')
 
 axs.axvline(x=0, color='black', linestyle='--', alpha=0.5)
 axs.axhline(y=0, color='black', linestyle='--', alpha=0.5)
@@ -465,6 +653,7 @@ custom_lines = [Line2D([0], [0], color='red', linestyle='--'),
                 Line2D([0], [0], color='black', linestyle='--', alpha=0.5)]
 
 fig.legend(custom_lines, ['Fixed Gaussian', 'Hypothetical Line Profile', 'Rest Wavelength'], loc='upper center', ncol=1, bbox_to_anchor=(-0.1, -0.13))
+plt.savefig('plots/Figure_theory_diag_diagram', dpi=dpi)
 plt.show()
 
 # %% Figure 2 - MASK FITTING METHODOLOGY
@@ -536,11 +725,12 @@ fig.subplots_adjust(wspace=0, top=0.85)
 fig.legend(handles, labels, loc='upper center', ncol=len(labels)/3, bbox_to_anchor=(0.48, 1.03))
 # add white space on the right side of the plot
 plt.subplots_adjust(right=0.83)
+plt.savefig('plots/Figure_mask_fit_method', dpi=dpi)
 plt.show()
 
-# %% FIGURE 4 - CV PAPER 4 SIROCCO SUBPLOTS
+# %% FIGURE 5 - CV PAPER 4 SIROCCO SUBPLOTS
 ################################################################################
-print('FIGURE 3 - CV PAPER 4 SIROCCO SUBPLOTS')
+print('FIGURE 5 - CV PAPER 4 SIROCCO SUBPLOTS')
 ################################################################################
 print('This plot is in the Sirocco_spectrum_plotter.py script')
 
@@ -561,7 +751,7 @@ plotting = False
 numbers = [10, 11, 12, 13, 14]
 for number in tqdm(numbers):
     inclination_column = number  # 45° inclination
-    if os.path.exists(f'Emission_Line_Asymmetries/FWHM_0p7_3_mask_data/final_results_inc_col_{inclination_column}.npy'):
+    if os.path.exists(f'Emission_Line_Asymmetries/FWHM_0p7_3_mask_data/final_results_inc_col_{inclination_column}.npy'): 
         final_results = np.load(f'Emission_Line_Asymmetries/FWHM_0p7_3_mask_data/final_results_inc_col_{inclination_column}.npy', allow_pickle=True).item()
         
     fwhm_bounds_array = np.array(final_results['fwhm_bounds']) # anstrom bounds
@@ -675,9 +865,12 @@ for number in tqdm(numbers):
     ew_results[inclination_column] = {'ew': ew, 'ew_error': ew_error}
     fwhm_results[inclination_column] = {'fwhm': fwhm, 'fwhm_error': fwhm_error}
 
-# %% Figure 5 - EW vs FWHM All Incs Scatter plot
+np.save('Emission_Line_Asymmetries/Sirocco_based_data/ew_results.npy', ew_results)
+np.save('Emission_Line_Asymmetries/Sirocco_based_data/fwhm_results.npy', fwhm_results)
+
+# %% Figure 6 - EW vs FWHM All Incs Scatter plot
 ################################################################################
-print('Figure 5 - EW vs FWHM All Incs Scatter plot')
+print('Figure 6 - EW vs FWHM All Incs Scatter plot')
 ################################################################################
 inclination_columns = [10, 11, 12, 13, 14]  # 20°, 45°, 60°, 72.5°, 85°
 incs = [0 for _ in range(10)]  # to align indices
@@ -751,38 +944,38 @@ for idx, inclination_column in enumerate(inclination_columns):
     med_res_colour = '#FF9200'#FF7400'
     low_res_colour = '#FF0000'#FFB800'
     sirocco_colour = '#0c01c7'#0c01c7''#223CFF'
-    in_seln_box_colour = '#00AE15'
+    in_seln_box_colour = '#50F279'
     if idx == 0:
-        ax.scatter(ew[relevent_runs[inclination_column]], fwhm[relevent_runs[inclination_column]], s=10, alpha=0.7, c=in_seln_box_colour, label='Selected Sirocco Spectra')
-        ax.scatter(ew[cut_runs_plotting_mask], fwhm[cut_runs_plotting_mask], c=sirocco_colour, s=10, alpha=0.7, label='Retained Sirocco Spectra')
-        ax.scatter(ew[anti_cut_runs_mask], fwhm[anti_cut_runs_mask], c='dimgrey', s=10, alpha=0.2, label='Excluded Sirocco Spectra')
-        ax.scatter(cuneo_ew, cuneo_fwhm, color='cyan', s=45, marker='o', edgecolor='navy', alpha=0.5, label='Cúneo et al. (2023)')
-        ax.scatter(ew_lrs, fwhm_lrs, color=low_res_colour, s=45, marker='o', edgecolor='black', alpha=0.2, label='Zhao et al. (2025) Low-Res Spectra')
-        ax.scatter(ew_mrs, fwhm_mrs, color=med_res_colour, s=45, marker='o', edgecolor='black', alpha=0.2, label='Zhao et al. (2025) Med-Res Spectra')
-        ax.scatter(ew[cut_runs_plotting_mask], fwhm[cut_runs_plotting_mask], c=sirocco_colour, s=10, alpha=0.7)
+        ax.scatter(ew[relevent_runs[inclination_column]], fwhm[relevent_runs[inclination_column]], s=20, alpha=0.7, c=in_seln_box_colour, edgecolor='black', label='Gold Sirocco Sample', linewidths=0.5)
+        ax.scatter(ew[cut_runs_plotting_mask], fwhm[cut_runs_plotting_mask], c=sirocco_colour, s=16,alpha=0.7,linewidths=0.5, edgecolor='silver', label='Silver Sirocco Sample')
+        ax.scatter(ew[anti_cut_runs_mask], fwhm[anti_cut_runs_mask], c='dimgrey', s=15, alpha=0.2,linewidths=0.5,  label='Bronze Sirocco Sample')
+        ax.scatter(cuneo_ew, cuneo_fwhm, color='cyan', s=45, marker='o', edgecolor='navy', alpha=0.5,linewidths=0.5,  label='Cúneo et al. (2023)')
+        ax.scatter(ew_lrs, fwhm_lrs, color=low_res_colour, s=45, marker='o', edgecolor='black', alpha=0.3,linewidths=0.5,  label='Zhao et al. (2025) Low-Res Spectra')
+        ax.scatter(ew_mrs, fwhm_mrs, color=med_res_colour, s=45, marker='o', edgecolor='black', alpha=0.3, linewidths=0.5, label='Zhao et al. (2025) Med-Res Spectra')
+        ax.scatter(ew[cut_runs_plotting_mask], fwhm[cut_runs_plotting_mask], c=sirocco_colour,s=16,edgecolor='silver',linewidths=0.5, alpha=0.7)
     else:
         #ax.scatter(ew[cut_runs_mask], fwhm[cut_runs_mask], c=sirocco_colour, s=10, alpha=0.7)
-        ax.scatter(ew[anti_cut_runs_mask], fwhm[anti_cut_runs_mask], c='dimgrey', s=10, alpha=0.2)
-        ax.scatter(cuneo_ew, cuneo_fwhm, color='cyan', s=45, marker='o', edgecolor='navy', alpha=0.5)
-        ax.scatter(ew_lrs, fwhm_lrs, color=low_res_colour, s=45, marker='o', edgecolor='black', alpha=0.2)
-        ax.scatter(ew_mrs, fwhm_mrs, color=med_res_colour, s=45, marker='o', edgecolor='black', alpha=0.2)
-        ax.scatter(ew[cut_runs_plotting_mask], fwhm[cut_runs_plotting_mask], c=sirocco_colour, s=10, alpha=0.7)
+        ax.scatter(ew[anti_cut_runs_mask], fwhm[anti_cut_runs_mask], c='dimgrey',linewidths=0.5, edgecolor='black', s=15, alpha=0.2)
+        ax.scatter(cuneo_ew, cuneo_fwhm, color='cyan', s=45, marker='o', edgecolor='navy', linewidths=0.5, alpha=0.5)
+        ax.scatter(ew_lrs, fwhm_lrs, color=low_res_colour, s=45, marker='o', edgecolor='black', linewidths=0.5, alpha=0.3)
+        ax.scatter(ew_mrs, fwhm_mrs, color=med_res_colour, s=45, marker='o', edgecolor='black', linewidths=0.5, alpha=0.3)
+        ax.scatter(ew[cut_runs_plotting_mask], fwhm[cut_runs_plotting_mask], c=sirocco_colour,edgecolor='silver',linewidths=0.5, s=20, alpha=0.7)
     
-    ax.set_xlabel('Equivalent Width (Å)')
+    ax.set_xlabel('Equivalent Width ($\mathring{A}$)')
     if idx in [0, 3]:
-        ax.set_ylabel('Full-Width Half-Maximum (Å)')
+        ax.set_ylabel('Full-Width at Half-Maximum ($\mathring{A}$)')
     ax.set_title(f'{incs[inclination_column]}° inclination')
     ax.set_xscale('log')
     ax.set_yscale('log')
     ax.set_xlim(0.1, 400)
     ax.set_ylim(2, 500)
-    ax.grid(True, which='both', linestyle='--', alpha=0.5)
+    #ax.grid(True, which='both', linestyle='--', alpha=0.5)
 
     if idx == 0:
         ax.plot(
             [ew_threshold[0], ew_threshold[1], ew_threshold[1], ew_threshold[0], ew_threshold[0]], [fwhm_threshold[0], fwhm_threshold[0], fwhm_threshold[1], fwhm_threshold[1], fwhm_threshold[0]],
             color='black', linestyle='--', alpha=1.0, zorder=1, linewidth=2.0,
-            label=rf'\space${ew_threshold[0]}\mathring{{A}} \leq EW \leq {ew_threshold[1]}\mathring{{A}}$,\\ ${fwhm_threshold[0]}\mathring{{A}} \leq FWHM \leq {fwhm_threshold[1]}\mathring{{A}}$'
+            label=("Gold Selection Box") #rf'Selection Box, \\${ew_threshold[0]}\mathring{{A}} \leq EW \leq {ew_threshold[1]}\mathring{{A}}$,\\ ${fwhm_threshold[0]}\mathring{{A}} \leq FWHM \leq {fwhm_threshold[1]}\mathring{{A}}$'
         )
     else: 
         ax.plot(
@@ -791,22 +984,37 @@ for idx, inclination_column in enumerate(inclination_columns):
         )
     
 
-    ax.scatter(ew[relevent_runs[inclination_column]], fwhm[relevent_runs[inclination_column]], s=10, alpha=0.7, c=in_seln_box_colour)
+    ax.scatter(ew[relevent_runs[inclination_column]], fwhm[relevent_runs[inclination_column]], s=20, alpha=0.7, c=in_seln_box_colour, edgecolor='black', linewidths=0.5)
     # add text to top left of plot 
+    # if len(ew[relevent_runs[inclination_column]])<100:
+    #     ax.text(0.665, 0.82, f'SILVER$\,\subset\,$FULL: {len(ew[cut_runs_mask])}/729\n'+'GOLD$\,\subset\,$SILVER:\enspace\space'+f'{len(ew[relevent_runs[inclination_column]])}/{len(ew[cut_runs_mask])}',
+    #         transform=ax.transAxes,
+    #         fontsize=15, 
+    #         bbox=dict(boxstyle='round', facecolor='white', alpha=0.5, edgecolor='grey'),
+    #         ha='right', 
+    #         va='bottom') #GOLD Sel$^{\mathrm{n}}$ Box:\enspace\enspace
+    # else: 
+    #     ax.text(0.67, 0.82, f'SILVER$\,\subset\,$FULL: {len(ew[cut_runs_mask])}/729\n'+'GOLD$\,\subset\,$SILVER:\space'+f'{len(ew[relevent_runs[inclination_column]])}/{len(ew[cut_runs_mask])}',
+    #         transform=ax.transAxes,
+    #         fontsize=15, 
+    #         bbox=dict(boxstyle='round', facecolor='white', alpha=0.5, edgecolor='grey'),
+    #         ha='right', 
+    #         va='bottom') #GOLD Sel$^{\mathrm{n}}$ Box:\enspace
+
     if len(ew[relevent_runs[inclination_column]])<100:
-        ax.text(0.54, 0.82, f'Retained: {len(ew[cut_runs_mask])}/729\n'+'In Sel$^{\mathrm{n}}$ Box:\enspace\enspace'+f'{len(ew[relevent_runs[inclination_column]])}/{len(ew[cut_runs_mask])}',
+      ax.text(0.03, 0.80, f'\#\;in\;Bronze:\:{729-len(ew[cut_runs_mask])}\n'+f'\#\;in\;Silver: \,\:{len(ew[cut_runs_mask])-len(ew[relevent_runs[inclination_column]])}\n'+f'\#\;in\;Gold:\enspace\enspace\enspace\,{len(ew[relevent_runs[inclination_column]])}',
             transform=ax.transAxes,
             fontsize=15, 
             bbox=dict(boxstyle='round', facecolor='white', alpha=0.5, edgecolor='grey'),
-            ha='right', 
-            va='bottom')
+            ha='left', 
+            va='bottom') #GOLD Sel$^{\mathrm{n}}$ Box:\enspace\enspace
     else: 
-        ax.text(0.54, 0.82, f'Retained: {len(ew[cut_runs_mask])}/729\n'+'In Sel$^{\mathrm{n}}$ Box:\enspace'+f'{len(ew[relevent_runs[inclination_column]])}/{len(ew[cut_runs_mask])}',
+        ax.text(0.03, 0.80, f'\#\;in\;Bronze:\:{729-len(ew[cut_runs_mask])}\n'+f'\#\;in\;Silver: \,\:{len(ew[cut_runs_mask])-len(ew[relevent_runs[inclination_column]])}\n'+f'\#\;in\;Gold:\enspace\enspace\,{len(ew[relevent_runs[inclination_column]])}',
             transform=ax.transAxes,
             fontsize=15, 
             bbox=dict(boxstyle='round', facecolor='white', alpha=0.5, edgecolor='grey'),
-            ha='right', 
-            va='bottom')
+            ha='left', 
+            va='bottom') #GOLD Sel$^{\mathrm{n}}$ Box:\enspace
 
     ax.set_axisbelow(True) 
 # Adjust subplot spacing (both horizontally and vertically)
@@ -814,20 +1022,20 @@ fig.subplots_adjust(wspace=0, hspace=0.15, top=0.88)
 
 # Position the legend closer to the top
 fig.legend(
-    loc='lower right', ncol=1,
-    bbox_to_anchor=(0.92, 0.1075),
+    loc='lower right', ncol=1, alignment='left',
+    bbox_to_anchor=(0.92, 0.125),
 )
 # Manually reposition the bottom row subplots so they are centered
 pos3 = axs[3].get_position()
 pos4 = axs[4].get_position()
 axs[3].set_position([0.125, pos3.y0-0.04, 0.26, pos3.height])  # shift bottom-left a bit to the right
-axs[4].set_position([0.385, pos4.y0-0.04, 0.255, pos4.height])  # shift bottom-right a bit left
-
+axs[4].set_position([0.383, pos4.y0-0.04, 0.26, pos4.height])  # shift bottom-right a bit left
+plt.savefig('plots/Figure_EW_vs_FWHM', dpi=dpi)
 plt.show()
 
-# %% FIGURE 6 - ALL INCS, REALISTIC RUNS, CUENO DATA
+# %% FIGURE 7 - ALL INCS, REALISTIC RUNS, CUENO DATA
 ################################################################################
-print('FIGURE 6 - ALL INCS, REALISTIC RUNS')
+print('FIGURE 7 - ALL INCS, REALISTIC RUNS')
 ################################################################################
 
 # Define inclination columns and incs
@@ -844,11 +1052,11 @@ fig.delaxes(axs[5])
 plt.rcParams.update({'font.size': 15})
 
 # Load Cuneo's data once
-cueno_refitted = np.load(f'Emission_Line_Asymmetries/Cuneo_2023_data/Cuneo_refitted_final_results.npy', allow_pickle=True).item()
-# bz_cam   = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/BZ Cam.csv',   delimiter=',')
-# mv_lyr   = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/MV Lyr.csv',   delimiter=',')
-# v425_cas = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/V425 Cas.csv', delimiter=',')
-# v751_cyg = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/V751 Cyg.csv', delimiter=',')
+cueno_refitted = np.load(f'Emission_Line_Asymmetries/Cuneo_2023_figure_data/Cuneo_refitted_final_results.npy', allow_pickle=True).item()
+# bz_cam   = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/BZ Cam.csv',   delimiter=',')
+# mv_lyr   = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/MV Lyr.csv',   delimiter=',')
+# v425_cas = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/V425 Cas.csv', delimiter=',')
+# v751_cyg = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/V751 Cyg.csv', delimiter=',')
 
 # Prepare legend handles
 handles = []
@@ -944,7 +1152,7 @@ for idx, inclination_column in enumerate(inclination_columns):
     if idx == 0:
         teo_scatter = ax.scatter(cueno_refitted['red_ew_excess'], 
                                  cueno_refitted['blue_ew_excess'],
-                                 color='cyan', s=45, marker='o',edgecolor='navy',
+                                 color='cyan', s=45, marker='o',edgecolor='navy',linewidths=0.5,
                                  alpha=0.7,
                                  label='Cúneo et al. (2023)', 
                                  zorder=4)
@@ -972,7 +1180,7 @@ for idx, inclination_column in enumerate(inclination_columns):
     elif idx == 1: 
         teo_scatter = ax.scatter(cueno_refitted['red_ew_excess'],
                                 cueno_refitted['blue_ew_excess'],
-                                color='cyan', s=45, marker='o',edgecolor='navy',
+                                color='cyan', s=45, marker='o',edgecolor='navy', linewidths=0.5,
                                 alpha=0.7, zorder=4)
         ax.errorbar(
             cueno_refitted['red_ew_excess'],
@@ -1079,12 +1287,13 @@ pos3 = axs[3].get_position()
 pos4 = axs[4].get_position()
 axs[3].set_position([0.125, pos3.y0-0.04, 0.26, pos3.height])  # shift bottom-left a bit to the right
 axs[4].set_position([0.385, pos4.y0-0.04, 0.255, pos4.height])  # shift bottom-right a bit left
+plt.savefig('plots/Figure_GOLD_diag', dpi=dpi)
 plt.show()
 
 
-# %% FIGURE 7 - QUADRANTED MASKING ARROW PLOT
+# %% FIGURE 8 - QUADRANTED MASKING ARROW PLOT
 ################################################################################
-print('FIGURE 7 - QUADRANTED MASKING ARROW PLOT')
+print('FIGURE 8 - QUADRANTED MASKING ARROW PLOT')
 ################################################################################
 mask_results = {}
 inclination_column = 11  # 45° inclination
@@ -1271,8 +1480,8 @@ plt.axhline(y=0, color='black', linestyle='--', alpha=0.5, zorder=1)
 # Format plot axes and labels
 incs = [0] * 10
 incs.extend([20, 45, 60, 72.5, 85])
-plt.xlabel('Red Wing EW Excess ($Å$)')
-plt.ylabel('Blue Wing EW Excess ($Å$)')
+plt.xlabel('Red Wing EW Excess ($\mathring{A}$)')
+plt.ylabel('Blue Wing EW Excess ($\mathring{A}$)')
 plt.title(f'{incs[inclination_column]}° inclination')
 
 linear_thrs = 0.1
@@ -1320,11 +1529,12 @@ legend = plt.legend(
     frameon=True
 )
 legend.get_frame().set_facecolor('white')
+plt.savefig('plots/Figure_masking_effect', dpi=dpi)
 plt.show()
 
-# %% FIGURE 8 - FWHM WINDOW Comparison with Cúneo Data for 20° and 45°
+# %% FIGURE 9 - FWHM WINDOW Comparison with Cúneo Data for 20° and 45°
 ################################################################################
-print('FIGURE 8 - FWHM WINDOW Comparison with Cúneo Data for 20° and 45°')
+print('FIGURE 9 - FWHM WINDOW Comparison with Cúneo Data for 20° and 45°')
 ################################################################################
 
 # Example: define your inclination columns and incs
@@ -1454,6 +1664,7 @@ for idx, inclination_column in enumerate(inclination_columns):
             marker='o',
             edgecolor='navy',
             alpha=0.7,
+            linewidths=0.5,
             label='Cúneo et al. (2023)'
         )
 
@@ -1488,7 +1699,7 @@ for idx, inclination_column in enumerate(inclination_columns):
             s=45,
             marker='o',
             edgecolor='navy',
-            alpha=0.7
+            alpha=0.7,linewidths=0.5
         )
         
     # Reference lines
@@ -1552,75 +1763,386 @@ fig.text(0.82, 1.013,
         ha='center', 
         va='top',
         multialignment='center')
+plt.savefig('plots/Figure_FWHM_diag', dpi=dpi)
 plt.show()
 
+# %% BUILDING BRONZE, SILVER and GOLD SAMPLES FOR ANIMATION
+################################################################################
+print('BUILDING GOLD/SILVER/BRONZE Data file')
+################################################################################
+data_store = {}
+for inc in [10,11,12,13,14]:
+    final_results = all_results[inc]
+    cut_runs = final_results['cut_runs']
+    cut_runs_mask = np.ones(729, dtype=bool)
+    cut_runs_mask[cut_runs] = False
+    gold = relevent_runs[inc]
+    silver = cut_runs_mask & ~relevent_runs[inc]
+    bronze = ~cut_runs_mask
+    print(sum(gold), sum(silver), sum(bronze), sum(gold)+ sum(silver)+ sum(bronze),inc)
+    # Build a list of 'gold'/'silver'/'bronze' labels for each run
+    labels = []
+    for i in range(len(gold)):
+        if gold[i]:
+            labels.append('gold')
+        elif silver[i]:
+            labels.append('silver')
+        elif bronze[i]:
+            labels.append('bronze')
+        else:
+            labels.append(None)
+    data_store[inc] = labels
+# save to a npz
+#np.savez_compressed('gold_silver_bronze_labels.npz', labels=data_store)
+# Load the saved npz file
+data = np.load('gold_silver_bronze_labels.npz', allow_pickle=True)
+# Extract the labels
+labels = data['labels'].item()  # Use .item() to get the dictionary
+
+
+
+# %% FIGURE 10: 'POWER LAW SCALING RELATION WITH INCLINATION TERM'
+################################################################################
+print('POWER LAW SCALING RELATION WITH INCLINATION TERM')
+################################################################################
+# Recompute normalized simulation parameters for all runs
+path_to_grids = "H_alpha_models"
+parameter_table = pd.read_csv(f'{path_to_grids}/Grid_runs_logfile.csv')
+# drop run number column, keep only the six model parameters
+X_full = parameter_table.iloc[:, 1:].values
+# standard values for normalization
+std_vals = np.array([1e-8, 1e-9, 5.5, 0.25, 7.25e9, 1.5])
+# split and normalize each column
+X1, X2, X3, X4, X5, X6 = [X_full[:, i] for i in range(6)]
+X1_norm = np.log10(X1 / std_vals[0])
+X2_norm = np.log10(X2 / std_vals[1])
+X3_norm = np.log10(X3 / std_vals[2])
+X4_norm = X4 - std_vals[3]
+X5_norm = np.log10(X5 / std_vals[4])
+X6_norm = X6 - std_vals[5]
+# assemble full design matrix (without constant)
+X_norm = np.column_stack((X1_norm, X2_norm, X3_norm, X4_norm, X5_norm, X6_norm))
+
+# Define inclinations and their physical angles
+inclination_columns = [10, 11, 12, 13, 14]
+incs = [0]*10 + [20, 45, 60, 72.5, 85]  # maps column index to degrees
+
+# Prepare lists to collect data across all inclinations
+log_ew_list = []
+design_list = []
+# Also track true inclinations per data point
+incl_list = []
+
+gold_mask_list = []
+# Loop through each inclination to build combined dataset
+for incl_col in inclination_columns:
+    ew_vals = ew_results[incl_col]['ew']
+    # keep only positive EWs
+    pos_mask = ew_vals > 0
+    ew_pos = ew_vals[pos_mask]
+    log_ew = np.log10(ew_pos)
+
+    # record the inclination for each point
+    incl_list.append(np.full_like(log_ew, incs[incl_col]))
+
+    # parameters for all positive-EW runs
+    X_norm_pos = X_norm[pos_mask]
+
+    # compute cosine-based inclination term
+    cos_i = np.cos(np.deg2rad(incs[incl_col]))
+    cos_ref = np.cos(np.deg2rad(incs[12]))
+    incl_array = np.full_like(log_ew, np.log10(cos_i / cos_ref))
+
+    # build design slice
+    X_slice = np.column_stack((X_norm_pos, incl_array))
+    design_list.append(X_slice)
+    log_ew_list.append(log_ew)
+
+    # store gold‐sample flags for this slice
+    gold_slice_mask = relevent_runs[incl_col][pos_mask]
+    gold_mask_list.append(gold_slice_mask)
+
+# Stack all inclinations
+X_all = np.vstack(design_list)
+y_all = np.concatenate(log_ew_list)
+incl_all = np.concatenate(incl_list)
+gold_all = np.concatenate(gold_mask_list)
+
+# Add intercept and fit OLS only on gold‐sample rows
+X_design = sm.add_constant(X_all, has_constant='add')
+res_gold = sm.OLS(y_all[gold_all], X_design[gold_all]).fit()
+print(res_gold.summary())
+
+### Predicting GOLD sample ###
+# Plot OLS performance with inclination and limb-darkening terms
+pred_gold = res_gold.predict(X_design[gold_all])
+
+# Calculate RMS scatter in dex
+residuals_gold = pred_gold - y_all[gold_all]
+#rms_scatter = np.sqrt(np.mean(residuals**2))
+rms_scatter_gold = np.std(residuals_gold)
+print(f'RMS scatter: {rms_scatter_gold:.3f} dex')
+
+# Convert back to linear scale for plotting
+ew_true_gold = 10**y_all[gold_all]
+ew_pred_gold = 10**pred_gold
+
+### Predicting FULL sample ###
+# Plot OLS performance with inclination and limb-darkening terms
+pred_all = res_gold.predict(X_design)
+
+# Calculate RMS scatter in dex
+residuals = pred_all - y_all
+#rms_scatter = np.sqrt(np.mean(residuals**2))
+rms_scatter = np.std(residuals)
+print(f'RMS scatter: {rms_scatter:.3f} dex')
+
+# Convert back to linear scale for plotting
+ew_true = 10**y_all
+ew_pred = 10**pred_all
+
+fig, ax = plt.subplots(figsize=(7,7))
+inc_values = [20, 45, 60, 72.5, 85]
+num_incl = len(inc_values)
+colors = plt.get_cmap('Blues')(np.linspace(1.0, 0.3, num_incl))
+colors2 = plt.get_cmap('summer')(np.linspace(0,1, num_incl))
+colors3= ['tab:blue', 'tab:red','tab:orange', 'tab:green', 'tab:purple']
+# Plot only gold‐sample points per inclination
+for inc_val, color in zip(inc_values, colors2):
+    mask_inc  = (incl_all == inc_val)
+    mask_gold = mask_inc & gold_all
+    ax.scatter(
+        ew_true[mask_gold],
+        ew_pred[mask_gold],
+        color=color,
+        alpha=0.8,
+        edgecolor='black',
+        label=f'{inc_val}°'
+    )
+ref_line = ax.plot(
+    [min(ew_true_gold)*0.1, max(ew_true_gold)*100],
+    [min(ew_true_gold)*0.1, max(ew_true_gold)*100],
+    linestyle='--',
+    linewidth=3,
+    color='black',
+    #label=r'$EW_{\mathrm{pred}} = EW$'
+)
+# Remove axis-level legend and title, replace with figure-level legend and bottom-right text
+# ax.legend(title='Inclination:', loc='lower right', frameon=True)
+# ax.set_title(f'$R^2 = {res_gold.rsquared:.3f}$, RMS = {rms_scatter_gold:.3f} dex')
+
+# Add figure-level legend at the top (immediately after reference line)
+# Collect handles and labels (inclinations + EW_pred=EW)
+handles, labels = ax.get_legend_handles_labels()
+fig.legend(handles, labels,
+           title='Inclinations',
+           ncol=5,
+           loc='upper center',
+           bbox_to_anchor=(0.5, 1.03),
+           )
+
+from matplotlib.lines import Line2D   # make sure this import is at the top
+
+# create a proxy artist for the ref‐line
+ref_handle = Line2D([0], [0], color='black', linestyle='--', linewidth=3)
+# draw a separate legend entry for it, slightly above your R² box
+ref_legend = fig.legend(
+    [ref_handle],
+    [r'$EW_{\mathrm{pred}} = EW$'],
+    loc='lower right',
+    bbox_to_anchor=(0.955, 0.17),   # tweak these coordinates if needed
+    frameon=False,
+    facecolor='white',
+    edgecolor='grey'
+)
+# make sure it doesn’t get overwritten
+fig.add_artist(ref_legend)
+
+# Add R² and RMS at bottom right
+fig.text(0.935, 0.14,
+         f'$R^2$: {res_gold.rsquared:.2f}, $\sigma$: {rms_scatter_gold:.2f} dex',
+         ha='right', va='bottom',
+         bbox=dict(boxstyle='round', facecolor='white', alpha=0.5, edgecolor='grey'))
+
+# Reference y = x line
+# min_ew = min(ew_true_gold.min()*0.1, ew_pred_gold.min()*10)
+# max_ew = max(ew_true_gold.max(), ew_pred_gold.max())
+#ax.plot([min_ew, max_ew], [min_ew, max_ew], 'k--', linewidth=2)
+
+# Log‐log axes and labels
+ax.set_xscale('log')
+ax.set_yscale('log')
+ax.set_xlim(left=2.5, right=80)
+ax.set_ylim(bottom=2, top=200)
+ax.set_xlabel('True Gold Equivalent Width ($\mathring{A}$)')
+ax.set_ylabel('Predicted Gold Equivalent Width ($\mathring{A}$)')
+# Optionally tighten layout to avoid legend overlap
+fig.tight_layout(rect=[0,0,1,0.95])
+
+# Inset: all positive‐EW data across inclinations
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+axins = inset_axes(
+    ax,
+    width="40%", height="40%",
+    loc='upper left',
+    bbox_to_anchor=(0.05, 0., 1, 1),  # x0, y0, width, height in axes fraction
+    bbox_transform=ax.transAxes,
+)
+
+
+# Build silver_all and bronze_all masks across all inclinations
+silver_mask_list = []
+bronze_mask_list = []
+for inc_val in inclination_columns:
+    # only include runs with positive EW
+    pos_mask = ew_results[inc_val]['ew'] > 0
+    final_results = all_results[inc_val]
+    cut_runs = final_results['cut_runs']
+    cut_runs_mask = np.ones(pos_mask.shape, dtype=bool)
+    cut_runs_mask[cut_runs] = False
+    # only include silver runs among those with positive EW
+    silver_full = cut_runs_mask & (~relevent_runs[inc_val])
+    silver_slice = silver_full[pos_mask]
+    # only include bronze runs among those with positive EW
+    bronze_full = ~cut_runs_mask
+    bronze_slice = bronze_full[pos_mask]
+    silver_mask_list.append(silver_slice)
+    bronze_mask_list.append(bronze_slice)
+# concatenate across all inclinations
+silver_all = np.concatenate(silver_mask_list)
+bronze_all = np.concatenate(bronze_mask_list)
+# gold_all already defined
+# Bronze (back)
+axins.scatter(
+    ew_true[bronze_all],
+    ew_pred[bronze_all],
+    alpha=0.2, c='dimgrey', edgecolor='black', linewidths=0.5, s=20,
+    label='Bronze $\mathrm{EW>0}$'
+)
+# Silver (middle)
+axins.scatter(
+    ew_true[silver_all],
+    ew_pred[silver_all],
+    color=sirocco_colour, alpha=0.6, linewidth=0.5, s=20,
+    edgecolor='black', label='Silver '
+)
+# Gold (front)
+axins.scatter(
+    ew_true[gold_all],
+    ew_pred[gold_all],
+    color=in_seln_box_colour, alpha=0.7, linewidth=0.5, s=20,
+    edgecolor='black', label='Gold'
+)
+# inset reference line
+axins.plot(
+    [min(ew_true_gold)-0.1, max(ew_true_gold)+0.1, max(ew_true_gold)+0.1, min(ew_true_gold)-0.1, min(ew_true_gold)-0.1],
+    [min(ew_pred_gold)-0.1, min(ew_pred_gold)-0.1, max(ew_pred_gold)+0.1, max(ew_pred_gold)+0.1, min(ew_pred_gold)-0.1],
+    color='black',
+    linestyle='--',
+    alpha=1.0,
+    zorder=1,
+    linewidth=1.0)
+
+axins.set_xscale('log')
+axins.set_yscale('log')
+axins.set_xticks([])
+axins.set_yticks([])
+axins.set_xlabel('True Full EW ($\mathring{A}$)', fontsize='12')
+axins.set_ylabel('Predicted Full EW ($\mathring{A}$)', fontsize='12')
+# Add legend for inset
+axins.legend(
+    loc='upper left',
+    bbox_to_anchor=(-0.07, 1.01),   # adjust these values to move the legend
+    borderaxespad=0.5,           # padding from the axes
+    fontsize=11
+)
+fig.savefig('plots/Figure_Power_Scaling_Law', dpi=dpi)
+plt.show()
 
 # %% EMISSION MEASUREMENTS, CURVE OF GROWTH FIT AND LINEAR REGRESSION CALCULATION
 ################################################################################
-print('EMISSION MEASUREMENTS, CURVE OF GROWTH FIT AND LINEAR REGRESSION CALCULATION')
+print('EMISSION MEASUREMENTS, L CURVE OF GROWTH FIT AND LINEAR REGRESSION CALCULATION')
 ################################################################################
 plt.rcParams.update({'font.size': 15})
 inclination = 11
-# load data
-emission_measures = np.load('Emission_Line_Asymmetries/Sirocco_based_data/emission_measures.npy')
+
+# filtering so no logging of negatives
 remove_negative_ews = []
 for i, val in enumerate(ew_results[inclination]['ew']):
     if val <= 0: 
         remove_negative_ews.append(i)
-emission_measures = np.delete(emission_measures, remove_negative_ews)
-equivalent_widths = np.delete(ew_results[inclination]['ew'], remove_negative_ews)
-equivalent_widths_error = np.delete(ew_results[inclination]['ew_error'], remove_negative_ews)
-log_ew = np.log10(equivalent_widths)
+
+# loading emission measures 
+emission_measures = np.load(
+    'Emission_Line_Asymmetries/Sirocco_based_data/emission_measures.npy')
 log_em = np.log10(emission_measures)
-log_ew_error = (1/np.log(10))*(equivalent_widths_error/equivalent_widths)
+log_em_full = log_em.copy()
+log_em = np.delete(log_em, remove_negative_ews)
 
-path_to_grids = "Release_Ha_grid_spec_files"
+#loading parameter combinations 
+path_to_grids = "H_alpha_models"
 parameter_table = pd.read_csv(f'{path_to_grids}/Grid_runs_logfile.csv')
+X = parameter_table.iloc[:, 1:].values# remove run number columns 
 
-# remove run number columns 
-X = parameter_table.iloc[:, 1:].values
-# only log10 the 0th, 1st, 2nd, and 4th columns. keep the rest the same
+# generate the array of standarised combinations
+std_vals = np.array([1e-8, 1e-9, 5.5, 0.25, 7.25e9, 1.5])
+# split and standarise each column
+X1, X2, X3, X4, X5, X6 = [X_full[:, i] for i in range(6)]
+X1_norm = np.log10(X1 / std_vals[0])
+X2_norm = np.log10(X2 / std_vals[1])
+X3_norm = np.log10(X3 / std_vals[2])
+X4_norm = X4 - std_vals[3]
+X5_norm = np.log10(X5 / std_vals[4])
+X6_norm = X6 - std_vals[5]
+# assemble full design matrix (without constant)
+X_norm = np.column_stack((X1_norm, X2_norm, X3_norm, X4_norm, X5_norm, X6_norm))
+X_norm_full = X_norm.copy()
+#remove negative EW runs combinations 
+X_norm = np.delete(X_norm, remove_negative_ews, axis=0)
+# Note: EM not dependent on inclination
 
-X_copy = X.copy() # for use later in script
-X = np.delete(X, remove_negative_ews, axis=0)
-log_X_all = np.column_stack((np.log10(X[:,0]),
-                             np.log10(X[:,1]),
-                             np.log10(X[:,2]),
-                             X[:,3],
-                             np.log10(X[:,4]), 
-                             X[:,5]
-                             ))
-
+# Sirocco Parameter labels
 sim_parameters = [r'$\dot{M}_{disk}$',
         r'$\dot{M}_{wind}$',
         r'$KWD.d$',
         r'$r_{exp}$',
         r'$acc_{length}$',
         r'$acc_{exp}$'
-        ] # Sirocco Parameters
+        ] 
 
+# Integrate line fluxes item by item to handle ragged arrays
+line_fluxes_list = []
+for i, (sk_con, ew_val, wl) in enumerate(zip(
+        all_results[inclination]['sk_con_data'],
+        ew_results[inclination]['ew'],
+        all_results[inclination]['wavelength_grid']
+    )):
+    # Multiply continuum-corrected spectrum by the EW scalar for this run
+    # and integrate over the wavelength grid
+    # Convert ragged lists to arrays for numeric operations
+    sk_con_arr = np.asarray(sk_con, dtype=float)
+    wl_arr = np.asarray(wl, dtype=float)
+    line_flux = np.trapz(sk_con_arr * ew_val, wl_arr)
+    line_fluxes_list.append(line_flux)
+line_fluxes = np.array(line_fluxes_list) * (4 * np.pi * (100 * 3.086e18)**2)
+# Remove runs with non-positive EW
+line_fluxes = np.delete(line_fluxes, remove_negative_ews)
+log_line_fluxes = np.log10(line_fluxes)
 
 # Ordinary Least Squares (OLS) model
-ols_X = sm.add_constant(log_X_all) # add an intercept value to the X parameters
-ols = sm.WLS(log_em, ols_X) # statsmodels OLS model
+ols_X_full = sm.add_constant(X_norm_full) # add an intercept value to the X parameters
+ols_X = sm.add_constant(X_norm) # add an intercept value to the X parameters
+ols = sm.OLS(log_em_full, ols_X_full) # statsmodels OLS model
 ols_result = ols.fit() # fitting the model
 print(ols_result.summary()) # summary of the model (errors, coefficients, etc)
 
-
-predicted_log_Y_all_ols = ols_result.predict(ols_X)
-
 eqn_all = f'log(EM) = {ols_result.params[0]:.3f} + {ols_result.params[1]:.3f}log({sim_parameters[0]}) + {ols_result.params[2]:.3f}log({sim_parameters[1]}) + {ols_result.params[3]:.3f}log({sim_parameters[2]}) + {ols_result.params[4]:.3f}{sim_parameters[3]} + {ols_result.params[5]:.3f}log({sim_parameters[4]}) + {ols_result.params[6]:.3f}{sim_parameters[5]}'
-
-print('Linear Regression model for the entire EW line') # in LaTeX style
+print('Linear Regression model for the entire line') # in LaTeX style
 display(Math(f'{eqn_all}')) # Latex formatted string to LaTeX output
 
-# # OLS error calculation using standard error of the coefficients
-# predicted_log_Y_all_ols_err = []
-# for i, _ in enumerate(ols_X):
-#     x_err_plus_c = [ols_result.bse[j]*abs(ols_X[i][j]) for j in range(len(ols_X[i]))]
-#     y_err = np.sqrt(np.sum(np.array(x_err_plus_c)**2))
-#     predicted_log_Y_all_ols_err.append(y_err)
-    
+# generate predicted dataset
+predicted_log_Y_all_ols = ols_result.predict(ols_X)
+
 plt.figure(figsize=(8, 8))
 plt.scatter(predicted_log_Y_all_ols, log_em, alpha=0.5)
 plt.xlabel('True $\mathrm{Log_{10}}$(Emission Measure)')
@@ -1634,7 +2156,6 @@ plt.plot([min(log_em), max(log_em)],
 plt.title(f'Inclination {incs[inclination]}°')
 plt.legend()
 plt.show()
-
 
 # CURVE OF GROWTH
 # over plotting the Curve of growth in astronomy 
@@ -1655,26 +2176,26 @@ def curve_of_growth(all_logEM, K1, K2): # K2 inputted as log to help with fittin
         W.append(K1 * quad(integrand, 0, np.inf, args=(tau_0))[0])
     return np.log10(W) # to reduce dynamic range of W
 
-    
+# YOU CAN SWITCH TO LINE FLUXES HERE WHERE ALL LOG_EW IS
 # Fit the curve of growth to the data with an initial guess for the parameters
-popt, pcov, _, _, _= opt.curve_fit(curve_of_growth, log_em, log_ew, p0=[7.0, -60],maxfev=100000, method='lm', full_output=True)
+popt, pcov, _, _, _= opt.curve_fit(curve_of_growth, log_em, log_line_fluxes, p0=[1e35, -50], maxfev=100000, method='lm', full_output=True) # p0=[7.0, -60],[1e35, -50]
 print(f'Curve of growth fit parameters true: {popt}')
 
 # Generate the curve of growth values using vectorized computation 
 N_values = 10**np.linspace(52, 61, 500)
-
+W_values_initial = curve_of_growth(np.log10(N_values), 1e35, -50)
 W_values = curve_of_growth(np.log10(N_values), *popt)
 plt.figure(figsize=(7, 7))
 plt.plot(np.log10(N_values), W_values, color='red', linestyle='--', label='Curve of Growth')
-#plt.plot(np.log10(N_values), W_values, color='blue', linestyle='--', label='Initial Guess')
-plt.scatter(log_em, log_ew, alpha=0.5)
+#plt.plot(np.log10(N_values), W_values_initial, color='blue', linestyle='--', label='Initial Guess')
+plt.scatter(log_em, log_line_fluxes, alpha=0.5)
 plt.xlabel('True $\mathrm{Log_{10}}$(Emission Measure)')
-plt.ylabel('$\mathrm{Log_{10}}$(Equivalent Width)')
+plt.ylabel('$\mathrm{Log_{10}}$(Assumed Isotropic Line Luminosities)') # Equivalent Width
 plt.title(f'Inclination: {incs[inclination]}°')
 #add the growth parameters to legend
 ax = plt.gca()
 ax.text(0.95, 0.05, 
-        f'CoG Coefficients:\n$K_1$: {popt[0]:.2f}\n$K_2$: {popt[1]:.2f}', 
+        f'CoG Coefficients:\n$K_1$: {popt[0]:.2e}\n$K_2$: {popt[1]:.2f}', 
         transform=ax.transAxes, 
         fontsize=15, 
         bbox=dict(boxstyle='round', facecolor='white', alpha=0.5, edgecolor='grey'),
@@ -1685,131 +2206,199 @@ plt.legend()
 plt.show()
 
 # kernel density estimate of log_em values 
-kde = KernelDensity(kernel='gaussian', bandwidth=1.8).fit(log_ew.reshape(-1, 1))
-density = np.exp(kde.score_samples(log_ew.reshape(-1, 1)))
-plt.plot(log_ew, density, 'o')
+kde = KernelDensity(kernel='gaussian', bandwidth=1.8).fit(log_line_fluxes.reshape(-1, 1))
+density = np.exp(kde.score_samples(log_line_fluxes.reshape(-1, 1)))
+plt.plot(log_line_fluxes, density, 'o')
 plt.show()
 
 # Fit the curve of growth to the data with an initial guess for the parameters
 # Generate the curve of growth values using vectorized computation
-popt_pred, pcov_pred, infodict_pred, _, _= opt.curve_fit(curve_of_growth, predicted_log_Y_all_ols, log_ew, sigma=density, absolute_sigma=True, p0=[7.0, -60], maxfev=100000, method='lm', full_output=True)
+popt_pred, pcov_pred, infodict_pred, _, _= opt.curve_fit(curve_of_growth, predicted_log_Y_all_ols, log_line_fluxes, sigma=density, absolute_sigma=True, p0=[1e35, -50], maxfev=100000, method='lm', full_output=True)
 print(f'Curve of growth fit parameters predicted: {popt_pred}')
 
 W_values_pred = curve_of_growth(np.log10(N_values), *popt_pred)
 plt.figure(figsize=(7, 7))
 plt.plot(np.log10(N_values), W_values_pred, color='red', linestyle='--', label='Curve of Growth')
-plt.errorbar(predicted_log_Y_all_ols, log_ew, yerr=log_ew_error, alpha=0.2,fmt='none', zorder=0)
+#plt.errorbar(predicted_log_Y_all_ols, log_ew, yerr=log_ew_error, alpha=0.2,fmt='none', zorder=0)
 #plt.plot(np.log10(N_values), curve_of_growth(np.log10(N_values), 4.7,-55.28), color='blue', linestyle='--', label='Initial Guess')
-plt.scatter(predicted_log_Y_all_ols, log_ew, alpha=0.5)
+plt.scatter(predicted_log_Y_all_ols, log_line_fluxes, alpha=0.5)
 plt.xlabel('Predicted $\mathrm{Log_{10}}$(Emission Measure)')
-plt.ylabel('$\mathrm{Log_{10}}$(Equivalent Width)')
+plt.ylabel('$\mathrm{Log_{10}}$(Assumed Isotropic Line Luminosities)')
 plt.title(f'Inclination: {incs[inclination]}°')
 #add the growth parameters to legend
 ax = plt.gca()
 ax.text(0.95, 0.05, 
-        f'CoG Coefficients:\n$K_1$: {popt_pred[0]:.2f}\n$K_2$: {popt_pred[1]:.2f}', 
+        f'CoG Coefficients:\n$K_1$: {popt_pred[0]:.2e}\n$K_2$: {popt_pred[1]:.2f}', 
         transform=ax.transAxes, 
         fontsize=15, 
         bbox=dict(boxstyle='round', facecolor='white', alpha=0.5, edgecolor='grey'),
         ha='right', 
         va='bottom')
-plt.ylim(min(log_ew)-0.2, max(log_ew)+0.2)
+plt.ylim(min(log_line_fluxes)-0.2, max(log_line_fluxes)+0.2)
 plt.legend()
 plt.show()
 
-# %% FIGURE 9 - LINEAR REGRESSORS OF EM AND EW
+# %% APPENDIX A1 - LINEAR REGRESSORS OF EM AND EW
 ################################################################################
-print('FIGURE 9 - LINEAR REGRESSORS OF EM AND EW')
+print('APPENDIX A1 - LINEAR REGRESSORS OF EM AND EW')
 ################################################################################
 
-fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 6))
+def to_latex_sci(value, precision=2):
+    # e.g., "3.00e-09" -> "3.00\times 10^{-9}"
+    s = f"{value:.{precision}e}"      # format as scientific e.g. "3.00e-09"
+    mantissa, exponent = s.split('e') # split into "3.00" and "-09"
+    exponent = exponent.replace('+', '')   # remove any "+"
+    return rf"{mantissa}\times 10^{{{int(exponent)}}}"
+    
+fig, axs = plt.subplots(1, 3, figsize=(15, 6))
+# Clear any existing panel titles
+for ax in axs:
+    ax.set_title('')
 
 not_relevant_runs_linear = np.delete(~relevent_runs[inclination], remove_negative_ews)
 relevent_runs_linear = np.delete(relevent_runs[inclination], remove_negative_ews)
+cut_runs = all_results[inclination_column]['cut_runs']
+cut_runs_mask = np.ones(729, dtype=bool)
+cut_runs_mask[cut_runs] = False
+silver_sample_plotting_mask = cut_runs_mask & ~relevent_runs[inclination_column]
+silver_sample_plotting_mask = np.delete(silver_sample_plotting_mask, remove_negative_ews)
 
-a=0.03
-b=1.91
-c=0.02
-d=0.75
-e=1.14
-f=0.61
-g=59.56
-test_EM = a*log_X_all[:,0] + b*log_X_all[:,1] + c*log_X_all[:,2] + d*log_X_all[:,3] + e*log_X_all[:,4] + f*log_X_all[:,5] + g
-
-h1 = ax1.scatter(log_em[not_relevant_runs_linear], predicted_log_Y_all_ols[not_relevant_runs_linear], alpha=0.5, c='navy')
-h2 = ax1.scatter(log_em[relevent_runs_linear], predicted_log_Y_all_ols[relevent_runs_linear], alpha=0.5, c='#00AE15')
-ax1.set_xlabel('True $\mathrm{Log_{10}}$(Emission Measure)')
-ax1.set_ylabel('Predicted$\mathrm{Log_{10}}$(Emission Measure)')
-ax1.plot(
-    [min(log_em), max(log_em)],
-    [min(log_em), max(log_em)],
-     linestyle='--', linewidth=3, label='$EM = EM_{pred}$',
-     c='red'
-)
-#ax1.set_title(f'Inclination {incs[inclination]}°')
-ax1.grid(True, which='both', linestyle='--', alpha=0.5)
-ax1.text(-0.255, 0.05, 
-        f'$R^2$ Score: {ols_result.rsquared:.2f}', 
-        transform=ax2.transAxes, 
-        fontsize=15, 
-        bbox=dict(boxstyle='round', facecolor='white', alpha=0.5, edgecolor='grey'),
-        ha='right', 
-        va='bottom')
-ax1.scatter(log_em, test_EM, alpha=0.5, c='orange', label='Test EM')
-ax1.legend()
 # Right subplot: Curve-of-Growth fit on linear data using a log-log plot
+axs[0].plot(np.log10(N_values), W_values,  linestyle='--', linewidth=3, label='Curve of Growth',c='black')
+axs[0].scatter(log_em[not_relevant_runs_linear], log_line_fluxes[not_relevant_runs_linear], alpha=0.3, c='dimgrey', edgecolor='black', linewidths=0.5)
+axs[0].scatter(log_em[silver_sample_plotting_mask], log_line_fluxes[silver_sample_plotting_mask], alpha=0.7, c=sirocco_colour, edgecolor='black', linewidths=0.5)
+axs[0].scatter(log_em[relevent_runs_linear], log_line_fluxes[relevent_runs_linear], alpha=0.7, c=in_seln_box_colour, edgecolor='black', linewidths=0.5)
+#ax[0].errorbar(log_em, log_line_fluxes, yerr=log_ew_error, alpha=0.2,fmt='none', zorder=0, c='black')
 
-plt.figure(figsize=(7, 7))
-ax2.plot(np.log10(N_values), W_values,  linestyle='--', linewidth=3, label='Curve of Growth',c='red')
-ax2.scatter(log_em[not_relevant_runs_linear], log_ew[not_relevant_runs_linear], alpha=0.5, c='navy')
-ax2.scatter(log_em[relevent_runs_linear], log_ew[relevent_runs_linear], alpha=0.5, c='#00AE15')
-ax2.errorbar(log_em, log_ew, yerr=log_ew_error, alpha=0.3,fmt='none', zorder=0)
-ax2.set_xlabel('True $\mathrm{Log_{10}}$(Emission Measure)')
-ax2.set_ylabel('$\mathrm{Log_{10}}$(Equivalent Width)')
+cog_line = curve_of_growth(log_em, *popt)
+residuals = log_line_fluxes - cog_line
+rms_scatter = np.std(residuals)
+print(f'RMS scatter: {rms_scatter:.2f} dex')
+
+axs[0].set_xlabel('True $\mathrm{Log_{10}}$(Emission Measure)')
+axs[0].set_ylabel('$\mathrm{Log_{10}}$(Assumed Isotropic Line Luminosities)')
 #add the growth parameters to legend
-ax2.text(0.95, 0.05, 
-        f'CoG Coefficients:\n$K_1$: {popt[0]:.1f}\n$K_2$: {popt[1]:.1f}', 
-        transform=ax2.transAxes, 
+axs[0].text(0.92, 0.12, 
+        f'$K_1$: ${to_latex_sci(popt[0])}$\n$K_2$: ${popt[1]:.2f}$\n $\sigma$: {rms_scatter:.2f} dex', 
+        transform=axs[0].transAxes, 
         fontsize=15, 
         bbox=dict(boxstyle='round', facecolor='white', alpha=0.5, edgecolor='grey'),
         ha='right', 
         va='bottom')
-ax2.set_xlim(min(predicted_log_Y_all_ols)-0.2, max(predicted_log_Y_all_ols)+0.2)
-ax2.set_ylim(min(log_ew)-0.2, max(log_ew)+0.2)
-ax2.legend()
-ax2.grid(True, which='both', linestyle='--', alpha=0.5)
-#ax2.set_title(f'Inclination: {incs[inclination]}°')
-#fig.suptitle(f'Inclination: {incs[inclination]}°')
+axs[0].set_xlim(min(predicted_log_Y_all_ols)-0.2, max(predicted_log_Y_all_ols)+0.2)
+axs[0].set_ylim(min(log_line_fluxes)-0.2, max(log_line_fluxes)+0.2)
+axs[0].legend(loc='lower right')
+axs[0].grid(True, which='both', linestyle='--', alpha=0.5)
 
-ax3.plot(np.log10(N_values), W_values_pred,  linestyle='--', linewidth=3, label='Curve of Growth',c='red')
-ax3.scatter(predicted_log_Y_all_ols[not_relevant_runs_linear], log_ew[not_relevant_runs_linear], alpha=0.5, c='navy')
-ax3.scatter(predicted_log_Y_all_ols[relevent_runs_linear], log_ew[relevent_runs_linear], alpha=0.5, c='#00AE15')
-ax3.errorbar(predicted_log_Y_all_ols, log_ew, yerr=log_ew_error, alpha=0.3,fmt='none', zorder=0)
-ax3.set_xlabel('Predicted $\mathrm{Log_{10}}$(Emission Measure)')
-ax3.set_ylabel('$\mathrm{Log_{10}}$(Equivalent Width)')
-#add the growth parameters to legend
-ax3.text(0.95, 0.05, 
-        f'CoG Coefficients:\n$K_1$: {popt_pred[0]:.1f}\n$K_2$: {popt_pred[1]:.1f}', 
-        transform=ax3.transAxes, 
+
+# to input your own coefficients
+# a=0.03
+# b=1.91
+# c=0.02
+# d=0.75
+# e=1.14
+# f=0.61
+# g=59.56
+# test_EM = a*log_X_all[:,0] + b*log_X_all[:,1] + c*log_X_all[:,2] + d*log_X_all[:,3] + e*log_X_all[:,4] + f*log_X_all[:,5] + g
+
+# Bronze EW>0 Sirocco Sample (background)
+h_bronze = axs[1].scatter(
+    log_em[not_relevant_runs_linear],
+    predicted_log_Y_all_ols[not_relevant_runs_linear],
+    alpha=0.3,
+    c='dimgrey',
+    edgecolor='black',
+    linewidths=0.5
+)
+# Silver Sirocco Sample (midground)
+h_silver = axs[1].scatter(
+    log_em[silver_sample_plotting_mask],
+    predicted_log_Y_all_ols[silver_sample_plotting_mask],
+    alpha=0.7,
+    c=sirocco_colour,
+    edgecolor='black',
+    linewidths=0.5
+)
+# Gold Sirocco Sample (foreground)
+h_gold = axs[1].scatter(
+    log_em[relevent_runs_linear],
+    predicted_log_Y_all_ols[relevent_runs_linear],
+    alpha=0.7,
+    c=in_seln_box_colour,
+    edgecolor='black',
+    linewidths=0.5
+)
+axs[1].set_xlabel('True $\mathrm{Log_{10}}$(Emission Measure)')
+axs[1].set_ylabel('Predicted $\mathrm{Log_{10}}$(Emission Measure)')
+axs[1].plot(
+    [min(log_em), max(log_em)],
+    [min(log_em), max(log_em)],
+     linestyle='--', linewidth=3, label='$EM_{pred} = EM$',
+     c='black'
+)
+# Calculate RMS scatter in dex
+residuals = predicted_log_Y_all_ols - log_em
+#rms_scatter = np.sqrt(np.mean(residuals**2))
+rms_scatter = np.std(residuals)
+print(f'RMS scatter: {rms_scatter:.2f} dex')
+#ax[0].grid(True, which='both', linestyle='--', alpha=0.5)
+axs[1].text(0.92, 0.06, 
+        f'$R^2$ Score: {ols_result.rsquared:.2f}\n $\sigma$: {rms_scatter:.2f} dex', 
+        transform=axs[1].transAxes, 
         fontsize=15, 
         bbox=dict(boxstyle='round', facecolor='white', alpha=0.5, edgecolor='grey'),
         ha='right', 
         va='bottom')
-ax3.set_xlim(min(predicted_log_Y_all_ols)-0.2, max(predicted_log_Y_all_ols)+0.2)
-ax3.set_ylim(min(log_ew)-0.2, max(log_ew)+0.2)
-ax3.legend()
-ax3.grid(True, which='both', linestyle='--', alpha=0.5)
-#ax3.set_title(f'Inclination: {incs[inclination]}°')
+#ax1.scatter(log_em, test_EM, alpha=0.5, c='orange', label='Test EM')
+axs[1].legend()
+
+axs[2].plot(np.log10(N_values), W_values_pred,  linestyle='--', linewidth=3, label='Curve of Growth',c='black')
+axs[2].scatter(predicted_log_Y_all_ols[not_relevant_runs_linear], log_line_fluxes[not_relevant_runs_linear], alpha=0.3, c='dimgrey', edgecolor='black', linewidths=0.5)
+axs[2].scatter(predicted_log_Y_all_ols[silver_sample_plotting_mask], log_line_fluxes[silver_sample_plotting_mask], alpha=0.7, c=sirocco_colour, edgecolor='black', linewidths=0.5)
+axs[2].scatter(predicted_log_Y_all_ols[relevent_runs_linear], log_line_fluxes[relevent_runs_linear], alpha=0.7, c=in_seln_box_colour, edgecolor='black', linewidths=0.5)
+#ax[2].errorbar(predicted_log_Y_all_ols, log_line_fluxes, yerr=log_ew_error, alpha=0.2,fmt='none', zorder=0, c='black')
+
+cog_line_pred = curve_of_growth(log_em, *popt_pred)
+residuals = log_line_fluxes - cog_line_pred
+rms_scatter = np.std(residuals)
+print(f'RMS scatter: {rms_scatter:.2f} dex')
+
+axs[2].set_xlabel('Predicted $\mathrm{Log_{10}}$(Emission Measure)')
+axs[2].set_ylabel('$\mathrm{Log_{10}}$(Assumed Isotropic Line Luminosities)')
+#add the growth parameters to legend
+axs[2].text(0.92, 0.12, 
+        f'$K_1$: ${to_latex_sci(popt_pred[0])}$\n$K_2$: ${popt_pred[1]:.2f}$\n $\sigma$: {rms_scatter:.2f} dex', 
+        transform=axs[2].transAxes, 
+        fontsize=15, 
+        bbox=dict(boxstyle='round', facecolor='white', alpha=0.5, edgecolor='grey'),
+        ha='right', 
+        va='bottom')
+axs[2].set_xlim(min(predicted_log_Y_all_ols)-0.2, max(predicted_log_Y_all_ols)+0.2)
+axs[2].set_ylim(min(log_line_fluxes)-0.2, max(log_line_fluxes)+0.2)
+axs[2].legend(loc='lower right')
+axs[2].grid(True, which='both', linestyle='--', alpha=0.5)
+
 # Create a single, figure-level legend for the common labels.
 # fig.legend([h2, h1],
 #            ['In Selection Box Sirocco Spectra', 'Remaining Positive EW Sirocco Spectra'],
 #            loc='upper center', ncol=2, fontsize=15, bbox_to_anchor=(0.43, 0.97))
 # fig.suptitle(f'Inclination: {incs[inclination]}°', x=0.8, y=0.94, fontsize=15)
-fig.legend([h2, h1],
-           ['In Selection Box Sirocco Spectra', 'Remaining Positive EW Sirocco Spectra'],
-           loc='upper center', ncol=2, fontsize=15, bbox_to_anchor=(0.375, 0.97))
-fig.suptitle(f'Inclination: {incs[inclination]}°', x=0.787, y=0.938, fontsize=15)
 
+# Set panel titles for three-panel layout
+axs[0].set_title(f'Inclination {incs[inclination]}°')
+axs[1].set_title('Valid For All Inclinations')
+axs[2].set_title(f'Inclination {incs[inclination]}°')
+
+fig.legend(
+    [h_gold, h_silver, h_bronze],
+    ['Gold Sirocco Sample', 'Silver Sirocco Sample', 'Bronze $\\mathrm{EW>0}$ Sirocco Sample'],
+    loc='upper center',
+    ncol=3,
+    fontsize=15,
+    bbox_to_anchor=(0.5, 1.01)
+)
+# fig.suptitle(f'Inclination: {incs[inclination]}°', x=0.85, y=0.938, fontsize=15)
+fig.savefig('plots/Appendix_CoG', dpi=dpi)
 plt.show()
 
 # %% FIGURE 3 Histogram of removed spectra
@@ -1817,7 +2406,7 @@ plt.show()
 print('FIGURE 3 Histogram of removed spectra')
 ################################################################################
 # Load grid parameter table (not used for plotting but available if needed)
-path_to_grids = "Release_Ha_grid_spec_files"
+path_to_grids = "H_alpha_models"
 parameter_table = pd.read_csv(f'{path_to_grids}/Grid_runs_logfile.csv')
 
 # Define categorical grid values for each parameter (6 parameters)
@@ -1897,9 +2486,9 @@ param_names = ['Disk Mass Accretion Rate',
                'Acceleration Length', 
                'Acceleration Exponent']
 
-# Pick colors for the inclinations – here we use a viridis colormap.
+# Pick colors for the inclinations – here we use a colormap.
 colors = plt.get_cmap('Blues')(np.linspace(1.0, 0.3, num_incl))
-colors2 = plt.get_cmap('Greens')(np.linspace(1.0, 0.3, num_incl))
+colors2 = plt.get_cmap('summer')(np.linspace(0,1, num_incl))
 x = np.arange(len(categories))  # x positions for each category group
 
 # For legend purposes, collect one handle per inclination (only once)
@@ -1950,7 +2539,7 @@ for param_idx in range(num_params):
 
 # Add a single legend for the inclinations
 fig.legend(leg_handles, leg_labels, fontsize=16, loc='upper right', ncol=5, bbox_to_anchor=(0.48, 0.95))
-fig.suptitle('Light Grey = Removed Spectra', fontsize=16, x=0.775, y=0.88, bbox=dict(boxstyle='round', facecolor='white', alpha=0.5, edgecolor='grey'))
+fig.suptitle('Light Grey = Bronze Sirocco Sample', fontsize=16, x=0.75, y=0.88, bbox=dict(boxstyle='round', facecolor='white', alpha=0.5, edgecolor='grey'))
 fig.text(0.226, 0.84, 
         '20° \qquad\quad 45° \qquad\quad  60° \qquad\quad 72.5° \qquad\ 85°', 
         #transform=ax3.transAxes, 
@@ -1958,12 +2547,13 @@ fig.text(0.226, 0.84,
         ha='left', 
         va='bottom')
 fig.text(0.18, 0.82, 
-        'Blues = Retained Spectra \nGreens = Selected Spectra', 
+        'Silver Sirocco Sample \nGold Sirocco Sample', 
         bbox=dict(boxstyle='round', facecolor='white', alpha=0.5, edgecolor='grey'),
         fontsize=16, 
         ha='right', 
         va='bottom')
 plt.tight_layout(rect=[0, 0, 0.9, 0.93])
+plt.savefig('plots/Figure_combination_binning', dpi=dpi)
 plt.show()
 # # correct unique_combinations built-in code rounding issue
 # for i, _ in enumerate(unique_combinations):
@@ -2069,11 +2659,11 @@ all_results = {}
 inclination_columns = [11]  # 45° inclination
 mask = '22_55_mask' # 11-88 = 500-4000, 22-88 = 1000-4000, 22-55 = 1000-2500, 22-90 = 1000-4100
 for inclination_column in inclination_columns:
-    if os.path.exists(f'Emission_Line_Asymmetries/new_data/{mask}/final_results_inc_col_{inclination_column}.npy'):
-        all_results[inclination_column] = np.load(f'Emission_Line_Asymmetries/new_data/{mask}/final_results_inc_col_{inclination_column}.npy', allow_pickle=True).item()
+    if os.path.exists(f'Emission_Line_Asymmetries/final_data/{mask}/final_results_inc_col_{inclination_column}.npy'):
+        all_results[inclination_column] = np.load(f'Emission_Line_Asymmetries/final_data/{mask}/final_results_inc_col_{inclination_column}.npy', allow_pickle=True).item()
 
 #load existing grid parameters to add statistics.
-path_to_grids = "Release_Ha_grid_spec_files"
+path_to_grids = "H_alpha_models"
 parameter_table = pd.read_csv(f'{path_to_grids}/Grid_runs_logfile.csv')
 table_df = pd.DataFrame(columns=['Intergated Flux', 'Mean', 'Median', 'Mode', 'Stdev', 'Skewness', 'Kurtosis', 'Flat Spectrum (1=True, 0=False)'])
 
@@ -2238,8 +2828,10 @@ parameter_table.to_csv(f'Line_moments.csv', index=False)
 #save the sirocco data
 if save_sirocco_data:
     np.save('Emission_Line_Asymmetries/Sirocco_based_data/sirocco_data.npy', sirocco_dictionary)
-#%% Cuneo spectra processing to friendly format
-
+# %% Cuneo spectra processing to friendly format
+##############################################################################
+print("Processing Cueno's Data into a friendly format")
+##############################################################################
 import trm.molly as molly
 
 # list all file names wihin a directory
@@ -2275,7 +2867,6 @@ for path in paths:
     plt.title(f'{spectrum.head["Object"]}')
     plt.legend()
     plt.show()
-# %%
 # storing data to numpy friendly format
 w_min, w_max = wavelength_range
 for path in paths:
@@ -2314,7 +2905,7 @@ systems = np.array(systems)
 ################################################################################
 print('LINE LUMINOSITY CALCULATIONS')
 ################################################################################
-inclination = 12
+inclination = 14
 wave_grid = all_results[inclination]['wavelength_grid']
 flux_grid = all_results[inclination]['grid']
 continuum_grid = all_results[inclination]['sk_con_data']
@@ -2340,6 +2931,46 @@ for run in run_number:
 # np.save('total_luminosity.npy', total_luminosity_array)
 
 
+selected_runs = all_results[inclination]['cut_runs']
+selected_runs_mask = np.zeros(729, dtype=bool)          # initialise all-False
+selected_runs_mask[selected_runs] = True
+
+path_to_grids = "H_alpha_models"
+parameter_table = pd.read_csv(f'{path_to_grids}/Grid_runs_logfile.csv')
+
+# remove run number columns 
+X = parameter_table.iloc[:, 1:].values
+sim_parameters = [r'$\dot{M}_{disk}$',
+        r'$\dot{M}_{wind}$',
+        r'$KWD.d$',
+        r'$r_{exp}$',
+        r'$acc_{length}$',
+        r'$acc_{exp}$'
+        ] 
+
+for_christian_85 = {
+    'ew': ew_results[inclination]['ew'],
+    'em': emission_measures,
+    #'predicted_em': np.power(10, predicted_log_Y_all),
+    'L_line': store_total_luminosity,
+    'fwhm': fwhm_results[inclination]['fwhm'],
+    'selected_runs_mask': selected_runs_mask,
+    'realistic_runs_mask': relevent_runs[inclination],
+    sim_parameters[0]: X[:,0],
+    sim_parameters[1]: X[:,1],
+    sim_parameters[2]: X[:,2],
+    sim_parameters[3]: X[:,3],
+    sim_parameters[4]: X[:,4],
+    sim_parameters[5]: X[:,5],
+
+}
+
+# np.save('for_christian_85.npy', for_christian_85)
+# data = np.load('for_christian_85.npy', allow_pickle=True).item()
+# df = pd.DataFrame(data)
+# df.to_csv('for_christian_85.csv', index=False)
+
+#%%
 
 
 
@@ -2359,6 +2990,87 @@ for run in run_number:
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# %%
+##############################################################################
+# OLD CODE 
+##############################################################################
 # %matplotlib inline
 # import numpy as np
 # import time
@@ -2371,7 +3083,7 @@ for run in run_number:
 # from scipy.stats import skew, kurtosis, mode, describe, moment
 
 # # drawing random numbers from arbitrary pdfs just by using the cdf
-# path_to_grids = "Release_Ha_grid_spec_files"
+# path_to_grids = "H_alpha_models"
 # parameter_table = pd.read_csv(f'{path_to_grids}/Grid_runs_logfile.csv')
 # table_df = pd.DataFrame(columns=['Mean', 'Median', 'Mode', 'Stdev', 'Skewness', 'Kurtosis_excess', 'Flat Spectrum (1=True, 0=False)'])
 
@@ -2596,10 +3308,10 @@ for run in run_number:
 # plt.rcParams.update({'font.size': 15})
 
 # # Load Teo's data (only need to load once)
-# bz_cam = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/BZ Cam.csv', delimiter=',') 
-# mv_lyr = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/MV Lyr.csv', delimiter=',')
-# v425_cas = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/V425 Cas.csv', delimiter=',')
-# v751_cyg = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/V751 Cyg.csv', delimiter=',')
+# bz_cam = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/BZ Cam.csv', delimiter=',') 
+# mv_lyr = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/MV Lyr.csv', delimiter=',')
+# v425_cas = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/V425 Cas.csv', delimiter=',')
+# v751_cyg = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/V751 Cyg.csv', delimiter=',')
 
 # # Initialize lists to collect handles and labels for legend
 # handles = []
@@ -2959,7 +3671,7 @@ for run in run_number:
 # from scipy.stats import skew, kurtosis, mode, describe, moment
 
 # # drawing random numbers from arbitrary pdfs just by using the cdf
-# path_to_grids = "Release_Ha_grid_spec_files"
+# path_to_grids = "H_alpha_models"
 # parameter_table = pd.read_csv(f'{path_to_grids}/Grid_runs_logfile.csv')
 # table_df = pd.DataFrame(columns=['Mean', 'Median', 'Mode', 'Stdev', 'Skewness', 'Kurtosis', 'Flat Spectrum (1=True, 0=False)'])
 
@@ -3200,10 +3912,10 @@ for run in run_number:
 # plt.rcParams.update({'font.size': 15})
 
 # # Load Teo's data once
-# bz_cam   = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/BZ Cam.csv',   delimiter=',')
-# mv_lyr   = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/MV Lyr.csv',   delimiter=',')
-# v425_cas = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/V425 Cas.csv', delimiter=',')
-# v751_cyg = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/V751 Cyg.csv', delimiter=',')
+# bz_cam   = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/BZ Cam.csv',   delimiter=',')
+# mv_lyr   = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/MV Lyr.csv',   delimiter=',')
+# v425_cas = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/V425 Cas.csv', delimiter=',')
+# v751_cyg = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/V751 Cyg.csv', delimiter=',')
 
 # # Prepare legend handles
 # handles = []
@@ -3552,10 +4264,10 @@ for run in run_number:
 # plt.rcParams.update({'font.size': 15})
 
 # # Load Teo's data once
-# bz_cam   = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/BZ Cam.csv',   delimiter=',')
-# mv_lyr   = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/MV Lyr.csv',   delimiter=',')
-# v425_cas = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/V425 Cas.csv', delimiter=',')
-# v751_cyg = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/V751 Cyg.csv', delimiter=',')
+# bz_cam   = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/BZ Cam.csv',   delimiter=',')
+# mv_lyr   = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/MV Lyr.csv',   delimiter=',')
+# v425_cas = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/V425 Cas.csv', delimiter=',')
+# v751_cyg = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/V751 Cyg.csv', delimiter=',')
 
 # # Prepare legend handles
 # handles = []
@@ -3938,10 +4650,10 @@ for run in run_number:
 # # handles = []
 # # labels = []
 # # Load Teo's data (only need to load once)
-# bz_cam = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/BZ Cam.csv', delimiter=',') 
-# mv_lyr = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/MV Lyr.csv', delimiter=',')
-# v425_cas = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/V425 Cas.csv', delimiter=',')
-# v751_cyg = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/V751 Cyg.csv', delimiter=',')
+# bz_cam = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/BZ Cam.csv', delimiter=',') 
+# mv_lyr = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/MV Lyr.csv', delimiter=',')
+# v425_cas = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/V425 Cas.csv', delimiter=',')
+# v751_cyg = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/V751 Cyg.csv', delimiter=',')
 
 # # Create a figure with two adjacent subplots
 # fig, axs = plt.subplots(1, 2, figsize=(12, 6), sharex=False, sharey=True)
@@ -4075,10 +4787,10 @@ for run in run_number:
 # # handles = []
 # # labels = []
 # # Load Teo's data (only need to load once)
-# bz_cam = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/BZ Cam.csv', delimiter=',') 
-# mv_lyr = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/MV Lyr.csv', delimiter=',')
-# v425_cas = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/V425 Cas.csv', delimiter=',')
-# v751_cyg = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_data/V751 Cyg.csv', delimiter=',')
+# bz_cam = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/BZ Cam.csv', delimiter=',') 
+# mv_lyr = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/MV Lyr.csv', delimiter=',')
+# v425_cas = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/V425 Cas.csv', delimiter=',')
+# v751_cyg = np.loadtxt('Emission_Line_Asymmetries/Cuneo_2023_figure_data/V751 Cyg.csv', delimiter=',')
 
 # # Create a figure with two adjacent subplots
 # fig, axs = plt.subplots(1, 2, figsize=(12, 6), sharex=False, sharey=True)
@@ -4552,3 +5264,367 @@ for run in run_number:
 # print(f'Intercept: {ols_result.params[0]}')
 # print(f'Coefficients: {ols_result.params[1:]}')
 # print(f'std_err: {ols_result.bse}')
+
+# %% OLD POWER LAW SCALING RELATIOn
+# ################################################################################
+# print('POWER LAW SCALING RELATION')
+# ################################################################################
+
+
+# inclination = 11
+# remove_negative_ews = []
+# for i, val in enumerate(ew_results[inclination]['ew']):
+#     if val <= 0: 
+#         remove_negative_ews.append(i)
+# gold = relevent_runs[inclination_column]
+# remove_negative_ews_mask = np.ones(729, dtype=bool)
+# remove_negative_ews_mask[remove_negative_ews]=False
+# not_relevant_runs_linear = np.delete(~relevent_runs[inclination], remove_negative_ews)
+# relevent_runs_linear = np.delete(relevent_runs[inclination], remove_negative_ews)
+# silver_sample_plotting_mask = cut_runs_mask & ~relevent_runs[inclination_column]
+# gold_mask = gold & remove_negative_ews_mask
+
+# gold_runs = [i for i, val in enumerate(gold_mask) if val]
+# gold_runs = np.delete(gold_mask, remove_negative_ews)
+# silver_runs = np.delete(silver_sample_plotting_mask, remove_negative_ews)
+
+# equivalent_widths = np.delete(ew_results[inclination]['ew'], remove_negative_ews)
+# equivalent_widths_error = np.delete(ew_results[inclination]['ew_error'], remove_negative_ews)
+# log_ew = np.log10(equivalent_widths)
+
+# log_ew_error = (1/np.log(10))*(equivalent_widths_error/equivalent_widths)
+
+# path_to_grids = "H_alpha_models"
+# parameter_table = pd.read_csv(f'{path_to_grids}/Grid_runs_logfile.csv')
+
+# # remove run number columns 
+# X = parameter_table.iloc[:, 1:].values
+# # only log10 the 0th, 1st, 2nd, and 4th columns. keep the rest the same
+# std_vals = np.array([1e-8,1e-9,5.5,0.25,7.25e9,1.5]) #[1e-8,1e-9,5.5,0.25,7.25182e9,1.5][X[:,i].max()+X[:,i].min() for i in range(6)] [(X[:,i].max()+X[:,i].min())/2 for i in range(6)] 
+# y_obs = equivalent_widths
+
+# X_copy = X.copy() # for use later in script
+# X = np.delete(X, remove_negative_ews, axis=0)
+# X1, X2, X3, X4, X5, X6 = [X[:,i] for i in range(6)]
+# X1_norm = X1/std_vals[0]
+# X3_norm = X3/std_vals[2]
+# X2_norm = X2/std_vals[1]
+# X4_norm = X4-std_vals[3]
+# X5_norm = X5/std_vals[4]
+# X6_norm = X6-std_vals[5]
+# X_norm = np.column_stack((np.log10(X1_norm),
+#                           np.log10(X2_norm),
+#                           np.log10(X3_norm),
+#                           X4_norm,
+#                           np.log10(X5_norm),
+#                           X6_norm))
+
+# X_design = sm.add_constant(X_norm)
+# res = sm.OLS(log_ew[gold_runs], X_design[gold_runs]).fit()
+# print(res.summary())
+# pred_data = res.predict(X_design)
+# fig, ax = plt.subplots(1,1,figsize=(7,7))
+# ax.scatter(log_ew[gold_runs],pred_data[gold_runs], c=in_seln_box_colour, alpha=0.7, edgecolor='black', linewidths=0.5)
+# ax.set_xlabel('True Gold $\mathrm{Log_{10}}$(Equivalent Width)')
+# ax.set_ylabel('Predicted Gold $\mathrm{Log_{10}}$(Equivalent Width)')
+# # plot a y = x line
+# ax.plot([min(log_ew[gold_runs])-0.1, max(log_ew[gold_runs])+0.1],
+#         [min(log_ew[gold_runs])-0.1, max(log_ew[gold_runs])+0.1],
+#         linestyle='--',
+#         linewidth=3, 
+#         label='$EW_{pred} = EW$',
+#         c='black'
+#         )
+# ax.set_xlim(min(log_ew[gold_runs])-0.1,max(log_ew[gold_runs])+0.1)
+# ax.set_ylim(min(pred_data[gold_runs])-0.1, max(pred_data[gold_runs])+0.1)
+# ax.errorbar(log_ew[gold_runs],pred_data[gold_runs], xerr=log_ew_error[gold_runs], yerr=log_ew_error[gold_runs], fmt='none', ecolor='black', alpha=0.5, zorder=-1)
+# ax.legend(loc='lower right')
+
+# h1 = h2 = h3 = None  # for legend assignment below, keep context
+# # Place inset with explicit anchor and padding for clear label space
+# axins = inset_axes(
+#     ax,
+#     width="40%",
+#     height="40%",
+#     bbox_to_anchor=(0.04, 0., 1, 1),  # x0, y0, width, height in axes fraction
+#     bbox_transform=ax.transAxes,
+#     loc='upper left'
+# )
+# h1 = axins.scatter(log_ew[not_relevant_runs_linear],pred_data[not_relevant_runs_linear], alpha=0.3, c='dimgrey', edgecolor='black', linewidths=0.5)
+# h3 = axins.scatter(log_ew[silver_runs],pred_data[silver_runs], alpha=0.7, c=sirocco_colour, edgecolor='black', linewidths=0.5)
+# h2 = axins.scatter(log_ew[gold_runs],pred_data[gold_runs], c=in_seln_box_colour, alpha=0.7, edgecolor='black', linewidths=0.5)
+# axins.set_xticks([])
+# axins.set_yticks([])
+# axins.set_xlabel('True $\mathrm{Log_{10}}$(Equivalent Width)', fontsize='10')
+# axins.set_ylabel('Predicted $\mathrm{Log_{10}}$(Equivalent Width)', fontsize='10')
+# axins.plot(
+#     [min(log_ew[gold_runs])-0.1, max(log_ew[gold_runs])+0.1, max(log_ew[gold_runs])+0.1, min(log_ew[gold_runs])-0.1, min(log_ew[gold_runs])-0.1],
+#     [min(pred_data[gold_runs])-0.1, min(pred_data[gold_runs])-0.1, max(pred_data[gold_runs])+0.1, max(pred_data[gold_runs])+0.1,min(pred_data[gold_runs])-0.1],
+#     color='black', 
+#     linestyle='--', 
+#     alpha=1.0, 
+#     zorder=1, 
+#     linewidth=1.0)
+# # locs = ['upper left', 'upper right', 'lower left', 'lower right']
+# # axins = inset_axes(ax,
+# #                     width="40%", height="40%",
+# #                     loc=locs[axis])
+# # for row in obs_flux:
+# #     axins.plot(wave, row, lw=0.5, color='black', alpha=0.6)
+# # axins.set_xticks([])
+# # axins.set_yticks([])
+# # axins.set_xlim(wave.min(), wave.max())
+# # # thin frame for the inset
+# # for spine in axins.spines.values():
+# #     spine.set_linewidth(0.5)
+# fig.legend([h2, h3, h1],
+#            ['Gold Sirocco Sample', 'Silver Sirocco Sample', 'Bronze $\mathrm{EW>0}$ Sirocco Sample'],
+#            loc='upper center', ncol=2, fontsize=14, bbox_to_anchor=(0.48, 0.98))
+# fig.suptitle(f'Inclination: {incs[inclination]}°', x=0.77, y=0.91, fontsize=15)
+# fig.savefig('plots/Figure_Power_Scaling_Law', dpi=dpi)
+# plt.show()
+
+
+# %%
+# fig, ax = plt.subplots(1,1,figsize=(7,7))
+# for inc_val, color in zip(inc_values, colors):
+#     mask = incl_all == inc_val
+#     ax.scatter(
+#         ew_true[mask],
+#         ew_pred[mask],
+#         color=color,
+#         alpha=0.7,
+#         edgecolor='black',
+#         label=f'{inc_val}°'
+#     )
+# ax.scatter(log_ew[gold_runs],pred_data[gold_runs], c=in_seln_box_colour, alpha=0.7, edgecolor='black', linewidths=0.5)
+# ax.set_xlabel('True Gold $\mathrm{Log_{10}}$(Equivalent Width)')
+# ax.set_ylabel('Predicted Gold $\mathrm{Log_{10}}$(Equivalent Width)')
+# # plot a y = x line
+# ax.plot([min(log_ew[gold_runs])-0.1, max(log_ew[gold_runs])+0.1],
+#         [min(log_ew[gold_runs])-0.1, max(log_ew[gold_runs])+0.1],
+#         linestyle='--',
+#         linewidth=3, 
+#         label='$EW_{pred} = EW$',
+#         c='black'
+#         )
+# ax.set_xlim(min(log_ew[gold_runs])-0.1,max(log_ew[gold_runs])+0.1)
+# ax.set_ylim(min(pred_data[gold_runs])-0.1, max(pred_data[gold_runs])+0.1)
+# ax.errorbar(log_ew[gold_runs],pred_data[gold_runs], xerr=log_ew_error[gold_runs], yerr=log_ew_error[gold_runs], fmt='none', ecolor='black', alpha=0.5, zorder=-1)
+# ax.legend(loc='lower right')
+
+# h1 = h2 = h3 = None  # for legend assignment below, keep context
+# # Place inset with explicit anchor and padding for clear label space
+# axins = inset_axes(
+#     ax,
+#     width="40%",
+#     height="40%",
+#     bbox_to_anchor=(0.04, 0., 1, 1),  # x0, y0, width, height in axes fraction
+#     bbox_transform=ax.transAxes,
+#     loc='upper left'
+# )
+# h1 = axins.scatter(log_ew[not_relevant_runs_linear],pred_data[not_relevant_runs_linear], alpha=0.3, c='dimgrey', edgecolor='black', linewidths=0.5)
+# h3 = axins.scatter(log_ew[silver_runs],pred_data[silver_runs], alpha=0.7, c=sirocco_colour, edgecolor='black', linewidths=0.5)
+# h2 = axins.scatter(log_ew[gold_runs],pred_data[gold_runs], c=in_seln_box_colour, alpha=0.7, edgecolor='black', linewidths=0.5)
+# axins.set_xticks([])
+# axins.set_yticks([])
+# axins.set_xlabel('True $\mathrm{Log_{10}}$(Equivalent Width)', fontsize='10')
+# axins.set_ylabel('Predicted $\mathrm{Log_{10}}$(Equivalent Width)', fontsize='10')
+# axins.plot(
+#     [min(log_ew[gold_runs])-0.1, max(log_ew[gold_runs])+0.1, max(log_ew[gold_runs])+0.1, min(log_ew[gold_runs])-0.1, min(log_ew[gold_runs])-0.1],
+#     [min(pred_data[gold_runs])-0.1, min(pred_data[gold_runs])-0.1, max(pred_data[gold_runs])+0.1, max(pred_data[gold_runs])+0.1,min(pred_data[gold_runs])-0.1],
+#     color='black', 
+#     linestyle='--', 
+#     alpha=1.0, 
+#     zorder=1, 
+#     linewidth=1.0)
+
+# fig.legend([h2, h3, h1],
+#            ['Gold Sirocco Sample', 'Silver Sirocco Sample', 'Bronze $\mathrm{EW>0}$ Sirocco Sample'],
+#            loc='upper center', ncol=2, fontsize=14, bbox_to_anchor=(0.48, 0.98))
+# fig.suptitle(f'Inclination: {incs[inclination]}°', x=0.77, y=0.91, fontsize=15)
+# leg_handles = []
+# leg_labels = []
+#         if param_idx == 0:
+#             leg_handles.append(bars)
+#             leg_labels.append('')
+#             leg_handles.append(rel_bars)
+#             leg_labels.append('')
+# fig.legend(leg_handles, leg_labels, fontsize=16, loc='upper right', ncol=5, bbox_to_anchor=(0.48, 0.95))
+# fig.suptitle('Light Grey = Bronze Sirocco Sample', fontsize=16, x=0.75, y=0.88, bbox=dict(boxstyle='round', facecolor='white', alpha=0.5, edgecolor='grey'))
+# fig.text(0.226, 0.84, 
+#         '20° \qquad\quad 45° \qquad\quad  60° \qquad\quad 72.5° \qquad\ 85°', 
+#         #transform=ax3.transAxes, 
+#         fontsize=18, 
+#         ha='left', 
+#         va='bottom')
+# fig.text(0.18, 0.82, 
+#         'Silver Sirocco Sample \nGold Sirocco Sample', 
+#         bbox=dict(boxstyle='round', facecolor='white', alpha=0.5, edgecolor='grey'),
+#         fontsize=16, 
+#         ha='right', 
+#         va='bottom')
+
+# fig.savefig('plots/Figure_Power_Scaling_Law', dpi=dpi)
+# plt.show()
+
+
+
+# # def power_model(X_tuple, C, a, b, c, d, e, f):
+# #     """linear space""""
+# #     X1, X2, X3, X4, X5, X6 = X_tuple
+# #     y = (C *
+# #         (X1/std_vals[0])**a *
+# #         (X2/std_vals[1])**b *
+# #         (X3/std_vals[2])**c *
+# #         (X4/std_vals[3])**d *
+# #         (X5/std_vals[4])**e *
+# #         (X6/std_vals[5])**f)
+# #     if np.any(y < 0): 
+# #         y = [-1000]*len(y)
+# #     return y
+
+# def power_model(X_tuple, C, a, b, c, d, e, f):
+#     "log space"
+#     X1, X2, X3, X4, X5, X6 = X_tuple
+#     y = (np.log10(C) *
+#         a*np.log10(X1/std_vals[0])*
+#         b*np.log10(X2/std_vals[1])*
+#         c*np.log10(X3/std_vals[2])*
+#         (X4/std_vals[3])**d*
+#         e*np.log10(X5/std_vals[4])*
+#         (X6/std_vals[5])**f)
+#     if np.any(y < 0): 
+#         y = [-1000]*len(y)
+#     return y
+
+# initials = [1e50, 1,1,1,1,1,1]  # initial guesses for C, a..f
+# popt, pcov = curve_fit(
+#     power_model,
+#     (X1, X2, X3, X4, X5, X6),
+#     y_obs,
+#     p0=initials,
+#     sigma = equivalent_widths_error,
+#     maxfev=10000
+# )
+# C_fit, a_fit, b_fit, c_fit, d_fit, e_fit, f_fit = popt
+# print(f"C = {C_fit:.3e}, a={a_fit:.2f}, b={b_fit:.2f}, c={c_fit:.2f}, d={d_fit:.2f}, e={e_fit:.2f}, f={f_fit:.2f}")
+
+# # plotting
+# y_obs_pred = power_model((X1, X2, X3, X4, X5, X6), C_fit, a_fit, b_fit, c_fit, d_fit, e_fit, f_fit)
+# plt.figure(figsize=(7,7))
+# plt.scatter(y_obs, y_obs_pred)
+# plt.xlabel('True Y data')
+# plt.ylabel('Predicted Y data')
+# plt.xscale('log')
+# plt.yscale('log')
+# plt.title('Curve_fit')
+# plt.show()
+
+
+
+# %% FWHM PREDICTION
+# attempting to predict fwhm
+# fig, axs = plt.subplots(2, 3, figsize=(12, 10))
+# axs = axs.flatten()
+# fig.delaxes(axs[5])  # remove the unused subplot
+
+# fig2, ax2 = plt.subplots(2, 3, figsize=(12, 10))
+# ax2 = ax2.flatten()
+# fig2.delaxes(ax2[5])  # remove the unused subplot
+# emission_measures = np.load('Emission_Line_Asymmetries/Sirocco_based_data/emission_measures.npy')
+# log_em = np.log10(emission_measures)
+# cut_runs = final_results['cut_runs']
+# for plot, inc in enumerate((10,11,12,13,14)):
+#     # FWHM OLS
+#     plt.rcParams.update({'font.size': 15})
+#     inclination = inc
+#     # load data
+#     log_fwhm_measures = np.log10(fwhm_results[inclination]['fwhm'])
+#     remove_negative_fwhms = []
+#     for i, val in enumerate(fwhm_results[inclination]['fwhm']):
+#         if val <= 0 or val > 600: 
+#             remove_negative_fwhms.append(i)
+#     #log_fwhm_measures = np.delete(log_fwhm_measures, remove_negative_fwhms)
+#     print(max(log_fwhm_measures))
+
+#     path_to_grids = "H_alpha_models"
+#     parameter_table = pd.read_csv(f'{path_to_grids}/Grid_runs_logfile.csv')
+
+#     # remove run number columns 
+#     X = parameter_table.iloc[:, 1:].values
+#     # only log10 the 0th, 1st, 2nd, and 4th columns. keep the rest the same
+
+#     X_copy = X.copy() # for use later in script
+#     #X = np.delete(X, remove_negative_fwhms, axis=0)
+#     log_X_all = np.column_stack((np.log10(X[:,0]),
+#                                 np.log10(X[:,1]),
+#                                 np.log10(X[:,2]),
+#                                 X[:,3],
+#                                 np.log10(X[:,4]), 
+#                                 X[:,5]
+#                                 ))
+
+#     sim_parameters = [r'$\dot{M}_{disk}$',
+#             r'$\dot{M}_{wind}$',
+#             r'$KWD.d$',
+#             r'$r_{exp}$',
+#             r'$acc_{length}$',
+#             r'$acc_{exp}$'
+#             ] # Sirocco Parameters
+
+
+#     # Ordinary Least Squares (OLS) model
+#     ols_X = sm.add_constant(log_X_all) # add an intercept value to the X parameters
+#     ols = sm.WLS(log_fwhm_measures, ols_X) # statsmodels OLS model
+#     ols_result = ols.fit() # fitting the model
+#     #print(ols_result.summary()) # summary of the model (errors, coefficients, etc)
+
+
+#     predicted_Y_all_ols = ols_result.predict(ols_X)
+
+#     eqn_all = f'log_fwhm = {ols_result.params[0]:.3f} + {ols_result.params[1]:.3f}log({sim_parameters[0]}) + {ols_result.params[2]:.3f}log({sim_parameters[1]}) + {ols_result.params[3]:.3f}log({sim_parameters[2]}) + {ols_result.params[4]:.3f}{sim_parameters[3]} + {ols_result.params[5]:.3f}log({sim_parameters[4]}) + {ols_result.params[6]:.3f}{sim_parameters[5]}'
+
+#     print('Linear Regression model for the entire EW line') # in LaTeX style
+#     display(Math(f'{eqn_all}')) # Latex formatted string to LaTeX output
+
+#     # # OLS error calculation using standard error of the coefficients
+#     # predicted_log_Y_all_ols_err = []
+#     # for i, _ in enumerate(ols_X):
+#     #     x_err_plus_c = [ols_result.bse[j]*abs(ols_X[i][j]) for j in range(len(ols_X[i]))]
+#     #     y_err = np.sqrt(np.sum(np.array(x_err_plus_c)**2))
+#     #     predicted_log_Y_all_ols_err.append(y_err)
+        
+#     axs[plot].scatter(log_fwhm_measures, predicted_Y_all_ols, alpha=0.5)
+#     axs[plot].set_xlabel('True log10(FWHM)')
+#     axs[plot].set_ylabel('Predicted log10(FWHM)')
+#     axs[plot].plot([min(log_fwhm_measures), max(log_fwhm_measures)],
+#             [min(log_fwhm_measures), max(log_fwhm_measures)],
+#             color='red',
+#             linestyle='--',
+#             label='$FWHM_{pred} = FWHM$'
+#             )
+#     axs[plot].set_title(f'Inclination {incs[inclination]}°')
+    
+#     #ax2.plot(np.log10(N_values), W_values,  linestyle='--', linewidth=3, label='Curve of Growth',c='red')
+#     ax2[plot].scatter(log_em, log_fwhm_measures, alpha=0.5, c='navy')
+#     #ax2.scatter(log_em, log_fwhm_measures, alpha=0.5, c='#00AE15')
+#     #ax2.errorbar(log_em, log_ew, yerr=log_ew_error, alpha=0.3,fmt='none', zorder=0)
+#     ax2[plot].set_xlabel('True $\mathrm{Log_{10}}$(Emission Measure)')
+#     ax2[plot].set_ylabel('$\mathrm{Log_{10}}$(FWHM)')
+#     #add the growth parameters to legend
+#     # ax2.text(0.95, 0.05, 
+#     #         f'CoG Coefficients:\n$K_1$: {popt[0]:.1f}\n$K_2$: {popt[1]:.1f}', 
+#     #         transform=ax2.transAxes, 
+#     #         fontsize=15, 
+#     #         bbox=dict(boxstyle='round', facecolor='white', alpha=0.5, edgecolor='grey'),
+#     #         ha='right', 
+#     #         va='bottom')
+#     #ax2.set_xlim(min(predicted_log_Y_all_ols)-0.2, max(predicted_log_Y_all_ols)+0.2)
+#     #ax2.set_ylim(min(log_ew)-0.2, max(log_ew)+0.2)
+#     ax2[plot].legend()
+#     ax2[plot].grid(True, which='both', linestyle='--', alpha=0.5)
+
+# fig.legend(loc='lower right')
+# plt.tight_layout()
+# plt.show()

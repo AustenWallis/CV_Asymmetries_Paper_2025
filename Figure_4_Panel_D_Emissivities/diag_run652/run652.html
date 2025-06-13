@@ -1,0 +1,165 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html lang="en">
+<head>
+	<meta http-equiv="content-type"
+	content="text/html; charset=ISO-8859-1">
+<title>run652: How well did the Python run go?</title>
+</head>
+	<body>
+<h1>run652: How well did the Python run go?</h1>
+
+<p> 
+	Provide an overview of whether the run of run652 has succeeded 
+</p>
+
+<ul>
+	<li>run652 ran to completion in 522.2 s.</li>
+	<li>25 ionization cycles were completed in 427.0 s.</li>
+	<li>12   spectrum cycles were completed in 92.20000000000005 s</li>
+</ul>
+<hr size="3" width="100%">
+<h2>Did the run converge?</h2>
+<div style="text-align: center;">
+	<img alt="Thumbnails" src="file:./diag_run652/convergence.png" width="400" height="400"> 
+</div>
+
+<p> 
+	
+The plot shows the fraction of cells which satisfy various convergence criteria, comparing the radiation tempererature, t_r, 
+the electron temperature, t_e between cycles, or the balance between heating and cooling in a given cycle.  If the fractional
+variation in, for example, the electron temperature has changed by less than 5%, then the electron temperature criterion has been passed.
+If a cell passes all three tests, it is said to have "converged".  The plot also indicates the number of cells for which the electron 
+temperature is evolving to a higher or lower value, rather than oscillating up and down in electron temperature. Such cells are said to be
+"converging".
+ 
+</p>
+
+<p> 
+	
+The plot below indicates which cells have converged.  The values given for each cell indicate  the number of convergence tests 
+which have failed, so a value of 0 indicates that a cell is "converged".
+ 
+</p>
+
+<div style="text-align: center;">
+	<img alt="Thumbnails" src="file:./diag_run652/run652_converge.png" width="400" height="400"> 
+</div>
+
+<hr size="3" width="100%">
+<h2>What do the temperatures look like?</h2>
+<div style="text-align: center;">
+	<img alt="Thumbnails" src="file:./diag_run652/run652_log_t_e.png" width="400" height="400"> 
+</div>
+
+<div style="text-align: center;">
+	<img alt="Thumbnails" src="file:./diag_run652/run652_log_t_r.png" width="400" height="400"> 
+</div>
+
+<hr size="3" width="100%">
+<h2>What do the total spectra look like (somewhat smoothed)?</h2>
+<div style="text-align: center;">
+	<img alt="Thumbnails" src="file:run652.spec_tot.png" width="800" height="400"> 
+</div>
+
+<p> 
+	
+This plot is based on the .spec_tot file.  It shows the photons that were created and emitted in the last ionization cycle.  
+The photons created by a central object or disk (the external sources) are plotted separately from the wind (the internal source).
+For a simple atom model, the wind photons are generated based on physical conditions in  the wind at the beginning of the cycle.
+Ror a macro-atom models, the wind photons are generated as photons pass through the wind and interact with macro-atoms.  The observed
+flux from photons that escape to infinity and a subset of this, the emitted flux of photons arising in the wind are also shown.
+Finally, the flux of the photons that hit the disk or star is also shown (as they would be seen at a distance of 100 pc).
+ 
+</p>
+
+<hr size="3" width="100%">
+<h2>What do the final spectra look like (somewhat smoothed)?</h2>
+<div style="text-align: center;">
+	<img alt="Thumbnails" src="file:run652.png" width="900" height="1500"> 
+</div>
+
+<p> 
+	
+This plot is from the .spec file, and shows the expected spectra (at 100 pc) as a function of the various inclination angles requested. Note
+that the y-axis scale varies for different inclination angles.
+ 
+</p>
+
+<hr size="3" width="100%">
+<h2>Errors and Warnings</h2>
+<p> 
+	
+Python accumulates a fairly large number of errors and warnings.  Most are benign, especially if they only occur a few
+times, but one should beware if an error message occurs many times, or if messages that look unusual start to appear.
+A summary of the errors for this run of the program is shown below.  More information about where the errors occured
+can be found in the diag files directory.  This summary presents the total number of times an error message of a particularly 
+type was generated; many times the same error message will will occur in each of the threads.  
+ 
+</p>
+<pre>Error summary: run652<br>Collated errors for 192 processors<br>Recurrences --  number of threads with error -- Description<br>	 1344 --   192 -- getatomic_data: line input f odd (may be OK if Macro): %s<br>	  576 --   192 -- Ignored %5d simple lines for macro-ion %5d  (z %5d ion %5d) <br>	  546 --    32 -- spectral_estimators: too few photons (1 or 0) in cell %d (%d) band %d to produce a model<br>	  237 --    29 -- zero_find failed: %d of %d brackets x_lo %e -> %e, x_hi %e -> %e<br>	  237 --    29 -- spectral_estimators: temp not bracketed<br>	  192 --   192 -- wind2d: Cell %3d (%2d,%2d) in domain %d has %d corners in wind, but zero volume<br>	  192 --   192 -- get_wind_params: zdom[ndom].rmax = 0 for wind type %d<br>	  192 --   192 -- Ignored %d inner shell cross sections because no matching yields<br>	  192 --   192 -- check_grid: optical depth may be high in %i<br>	  192 --   192 -- roche_width : zero_find failure x=%6.2e rho %.2e phi(l2) %.2e<br>	  192 --   192 -- check_grid: velocity changes by >1,000 km/s in %i cells<br>	  192 --   192 -- zero_find: function not bracketed x_lo %e -> %e, x_hi %e -> %e<br>	  192 --   192 -- check_grid: some cells have large changes. Consider modifying zlog_scale or grid dims<br>	   75 --    60 -- pillbox %d interfaces to pillbox is impossible<br>	   24 --    17 -- spectral_estimators: Alpha cannot be bracketed (%e %e)in band %i cell %i- setting w to zero<br><br></pre>
+<hr size="3" width="100%">
+<h2>The parameter file used:</h2>
+<ul>
+	<li>System_type(star,cv,bh,agn,previous)    cv</li>
+	<li>Central_object.mass(msol)    0.8</li>
+	<li>Central_object.radius(cm)    725182000.0</li>
+	<li>Central_object.radiation(yes,no)    no</li>
+	<li>Binary.mass_sec(msol)    0.4</li>
+	<li>Binary.period(hr)    3.2</li>
+	<li>Disk.type(none,flat,vertically.extended,rmin>central.obj.rad)    flat</li>
+	<li>Disk.radiation(yes,no)    yes</li>
+	<li>Disk.rad_type_to_make_wind(bb,models)    bb</li>
+	<li>Disk.temperature.profile(standard,readin)    standard</li>
+	<li>Disk.mdot(msol/yr)    3e-08</li>
+	<li>Disk.radmax(cm)    21755500000.0</li>
+	<li>Boundary_layer.radiation(yes,no)    no</li>
+	<li>Wind.number_of_components    1.0</li>
+	<li>Wind.type(SV,star,hydro,corona,kwd,homologous,shell,imported)    kwd</li>
+	<li>Wind.coord_system(spherical,cylindrical,polar,cyl_var)    cylindrical</li>
+	<li>Wind.dim.in.x_or_r.direction    30.0</li>
+	<li>Wind.dim.in.z_or_theta.direction    30.0</li>
+	<li>Photons_per_cycle    10000000.0</li>
+	<li>Ionization_cycles    25.0</li>
+	<li>Spectrum_cycles    12.0</li>
+	<li>Wind.ionization(on.the.spot,ML93,LTE_tr,LTE_te,fixed,matrix_bb,matrix_pow,matrix_est)    matrix_pow</li>
+	<li>Line_transfer(pure_abs,pure_scat,sing_scat,escape_prob,thermal_trapping,macro_atoms_escape_prob,macro_atoms_thermal_trapping)    macro_atoms_thermal_trapping</li>
+	<li>Matom_transition_mode(mc_jumps,matrix)    matrix</li>
+	<li>Atomic_data    data/h20_hetop_standard80.dat</li>
+	<li>Surface.reflection.or.absorption(reflect,absorb,thermalized.rerad)    reflect</li>
+	<li>Wind_heating.extra_processes(none,adiabatic,nonthermal,both)    adiabatic</li>
+	<li>Wind.mdot(msol/yr)    9e-09</li>
+	<li>KWD.d(in_units_of_rstar)    0.55</li>
+	<li>KWD.mdot_r_exponent    0.0</li>
+	<li>KWD.v_infinity(in_units_of_vescape)    2.0</li>
+	<li>KWD.acceleration_length(cm)    7251820000.0</li>
+	<li>KWD.acceleration_exponent    1.5</li>
+	<li>KWD.v_zero(multiple_of_sound_speed_at_base)    1.0</li>
+	<li>KWD.rmin(in_units_of_rstar)    1.0</li>
+	<li>KWD.rmax(in_units_of_rstar)    30.0</li>
+	<li>Wind.radmax(cm)    1000000000000.0</li>
+	<li>Wind.t.init    40000.0</li>
+	<li>Wind.filling_factor(1=smooth,<1=clumped)    1.0</li>
+	<li>Disk.rad_type_in_final_spectrum(bb,models,uniform,mono)    bb</li>
+	<li>Spectrum.nwave    700.0</li>
+	<li>Spectrum.wavemin(Angstroms)    6385.0</li>
+	<li>Spectrum.wavemax(Angstroms)    6735.0</li>
+	<li>Spectrum.no_observers    5.0</li>
+	<li>Spectrum.angle(0=pole)    20.0</li>
+	<li>Spectrum.angle(0=pole)    45.0</li>
+	<li>Spectrum.angle(0=pole)    60.0</li>
+	<li>Spectrum.angle(0=pole)    72.5</li>
+	<li>Spectrum.angle(0=pole)    85.0</li>
+	<li>Spectrum.orbit_phase(0=inferior_conjunction)    0.5</li>
+	<li>Spectrum.orbit_phase(0=inferior_conjunction)    0.5</li>
+	<li>Spectrum.orbit_phase(0=inferior_conjunction)    0.5</li>
+	<li>Spectrum.orbit_phase(0=inferior_conjunction)    0.5</li>
+	<li>Spectrum.orbit_phase(0=inferior_conjunction)    0.5</li>
+	<li>Spectrum.live_or_die(live.or.die,extract)    extract</li>
+	<li>Spectrum.type(flambda,fnu,basic)    flambda</li>
+	<li>Reverb.type(none,photon,wind,matom)    none</li>
+	<li>Photon_sampling.approach(T_star,cv,yso,AGN,tde_bb,min_max_freq,user_bands,cloudy_test,wide,logarithmic)    cv</li>
+</ul>
+<hr size="3" width="100%">
+
+</body> 
+</html>

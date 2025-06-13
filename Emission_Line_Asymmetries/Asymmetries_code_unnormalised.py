@@ -85,12 +85,12 @@ files = os.listdir(path_to_grid) # list of files in directory
 
 # -------INPUTS-------- #
 wavelength_range = (6435, 6685) # set desired wavelength range, start with the narrowest range
-inclination_column = 11 # 10-14 = 20,45,60,72.5,85
+inclination_column = 14 # 10-14 = 20,45,60,72.5,85
 grid_mixed = True # if grid is mixed, set to True to rerun the script at difference wavelength ranges
                   # you can change the wavelength range in the second input below.
 # Be sensible with intervals or you'll break code. (near peak first, far peak second)
-blue_peak_mask = (24,57) # number of angstroms to cut around the peak, blue minus.
-red_peak_mask = (24,57) # number of angstroms to cut around the peak, red plus.
+blue_peak_mask = (22,55) # number of angstroms to cut around the peak, blue minus.
+red_peak_mask = (22,55) # number of angstroms to cut around the peak, red plus.
 
 # --------------------- #
 H_alpha = 6562.819
@@ -1121,10 +1121,10 @@ print("STEP 9: PLOTTING THE EW EXCESSES FOR ALL RUNS AGAINST TEO'S DATA")
 %matplotlib inline
 
 # loading Teo's data from csv files
-bz_cam = np.loadtxt('Cuneo_2023_data/BZ Cam.csv', delimiter=',') 
-mv_lyr = np.loadtxt('Cuneo_2023_data/MV Lyr.csv', delimiter=',')
-v425_cas = np.loadtxt('Cuneo_2023_data/V425 Cas.csv', delimiter=',')
-v751_cyg = np.loadtxt('Cuneo_2023_data/V751 Cyg.csv', delimiter=',')
+bz_cam = np.loadtxt('Cuneo_2023_figure_data/BZ Cam.csv', delimiter=',') 
+mv_lyr = np.loadtxt('Cuneo_2023_figure_data/MV Lyr.csv', delimiter=',')
+v425_cas = np.loadtxt('Cuneo_2023_figure_data/V425 Cas.csv', delimiter=',')
+v751_cyg = np.loadtxt('Cuneo_2023_figure_data/V751 Cyg.csv', delimiter=',')
 
 # plot concentric circles of a given radius
 def circle(radius):
@@ -1223,6 +1223,7 @@ for num in grid_length: # run number ranges range(0,729)
 # initialising lists to store flat and high error runs
 cut_runs = []
 cut_runs_2 = []
+percent_list = []
 
 # finding the flat spectra with no emission lines
 for run in range(len(removed_runs)):
@@ -1233,10 +1234,24 @@ for run in range(len(removed_runs)):
     # converting continuum function to flux values at the right wavelengths
     rebased_con_fluxes = gradient*wavelength + intercept
     flux_without_continuum = flux - rebased_con_fluxes # flux without continuum
+    normalised_flux = flux/rebased_con_fluxes
+    cut_normalised_flux = normalised_flux[100:-100] # cutting the edges of the flux as unphysical
     cut_flux = flux_without_continuum[100:-100] # cutting the edges of the flux as unphysical
     cut_wavelength = wavelength[100:-100] # cutting the edges of the wavelength as unphysical
-    if np.max(cut_flux) < 4e-15: # flux limit to determine if flat
+    percent = np.max(cut_normalised_flux-1) # max normalised flux
+    #percent_list.append(percent)
+    # if np.max(cut_flux) < 4e-15: # flux limit to determine if flat
+    #     cut_runs.append(run)
+    if percent < 0.01: # flux limit to determine if flat
         cut_runs.append(run)
+    # plt.plot(cut_wavelength,cut_flux)
+    # ew = equivalent_width(cut_wavelength, flux[100:-100], rebased_con_fluxes[100:-100], 'all')
+    # plt.title(f'EW:{ew}')
+    # plt.show()
+    # plt.plot(wavelength,rebased_con_fluxes+flux_without_continuum, label='spectra')
+    # plt.plot(wavelength,rebased_con_fluxes, label='fitted continuum')
+    # plt.legend()
+    # plt.show()
 print(f"Removing {len(cut_runs)} flat spectra")
 
 def frms(data, fit, continuum) -> list:
@@ -1482,6 +1497,8 @@ final_results['cut_runs'] = cut_runs
 final_results['peak_colour_map'] = peak_colour_map
 
 print(f"Total remaining spectra = {len(final_results['grid']) - len(cut_runs)}")
+incs = [0 for i in range(10)] # to indent incs to the same column index as files
+[incs.append(i) for i in [20,45,60,72.5,85]] # inclinations from PYTHON models
 # %% save
 # store the results into an npy file
 np.save(f'final_results_inc_col_{inclination_column}.npy', final_results)
@@ -1504,13 +1521,11 @@ cut_peak_colour_map = np.delete(peak_colour_map, cut_runs)
 cut_grid = [i for j, i in enumerate(final_results['grid']) if j not in cut_runs]
 cut_grid_length = np.delete(grid_length, cut_runs)
 
-
-# TODO FIGURE 4
 # loading Teo's data from csv files
-bz_cam = np.loadtxt('Cuneo_2023_data/BZ Cam.csv', delimiter=',') 
-mv_lyr = np.loadtxt('Cuneo_2023_data/MV Lyr.csv', delimiter=',')
-v425_cas = np.loadtxt('Cuneo_2023_data/V425 Cas.csv', delimiter=',')
-v751_cyg = np.loadtxt('Cuneo_2023_data/V751 Cyg.csv', delimiter=',')
+bz_cam = np.loadtxt('Cuneo_2023_figure_data/BZ Cam.csv', delimiter=',') 
+mv_lyr = np.loadtxt('Cuneo_2023_figure_data/MV Lyr.csv', delimiter=',')
+v425_cas = np.loadtxt('Cuneo_2023_figure_data/V425 Cas.csv', delimiter=',')
+v751_cyg = np.loadtxt('Cuneo_2023_figure_data/V751 Cyg.csv', delimiter=',')
 
 # plot concentric circles of a given radius
 def circle(radius):
@@ -1646,10 +1661,10 @@ parameter_table = np.delete(parameter_table, 0, 1)
 # cut_grid_length = np.delete(grid_length, cut_runs)
 
 # Loading Teo's data from csv files
-bz_cam = np.loadtxt('Cuneo_2023_data/BZ Cam.csv', delimiter=',') 
-mv_lyr = np.loadtxt('Cuneo_2023_data/MV Lyr.csv', delimiter=',')
-v425_cas = np.loadtxt('Cuneo_2023_data/V425 Cas.csv', delimiter=',')
-v751_cyg = np.loadtxt('Cuneo_2023_data/V751 Cyg.csv', delimiter=',')
+bz_cam = np.loadtxt('Cuneo_2023_figure_data/BZ Cam.csv', delimiter=',') 
+mv_lyr = np.loadtxt('Cuneo_2023_figure_data/MV Lyr.csv', delimiter=',')
+v425_cas = np.loadtxt('Cuneo_2023_figure_data/V425 Cas.csv', delimiter=',')
+v751_cyg = np.loadtxt('Cuneo_2023_figure_data/V751 Cyg.csv', delimiter=',')
 
 # Animation for the EW excess plots showing the data for particular runs and 
 # the fit to data to produce than run's EW excess.
@@ -1714,7 +1729,7 @@ def slider_update(val):
                      fmt='o',
                      ecolor='black',
                      zorder=5,
-                     c='black'
+                     c='red'
                      )
         ax2.legend([f'Run {val}'], loc='upper left')
         ax[1].set_title(f"✔︎ Run {int(val)} ✔︎ \n Gaussian and Continuum Fit to Data")
@@ -1940,10 +1955,10 @@ parameter_table = np.delete(parameter_table, 0, 1)
 # cut_grid_length = np.delete(grid_length, cut_runs)
 
 # Loading Teo's data from csv files
-bz_cam = np.loadtxt('Cuneo_2023_data/BZ Cam.csv', delimiter=',') 
-mv_lyr = np.loadtxt('Cuneo_2023_data/MV Lyr.csv', delimiter=',')
-v425_cas = np.loadtxt('Cuneo_2023_data/V425 Cas.csv', delimiter=',')
-v751_cyg = np.loadtxt('Cuneo_2023_data/V751 Cyg.csv', delimiter=',')
+bz_cam = np.loadtxt('Cuneo_2023_figure_data/BZ Cam.csv', delimiter=',') 
+mv_lyr = np.loadtxt('Cuneo_2023_figure_data/MV Lyr.csv', delimiter=',')
+v425_cas = np.loadtxt('Cuneo_2023_figure_data/V425 Cas.csv', delimiter=',')
+v751_cyg = np.loadtxt('Cuneo_2023_figure_data/V751 Cyg.csv', delimiter=',')
 
 # Animation for the EW excess plots showing the data for particular runs and 
 # the fit to data to produce than run's EW excess.
@@ -2248,10 +2263,10 @@ print('STEP 11: REPLOTTING THE EW EXCESSES WITHOUT THE CUT RUNS FWHM MASK')
 # cut_grid_length = np.delete(grid_length, cut_runs)
 
 # Loading Teo's data from csv files
-# bz_cam = np.loadtxt('Cuneo_2023_data/BZ Cam.csv', delimiter=',') 
-# mv_lyr = np.loadtxt('Cuneo_2023_data/MV Lyr.csv', delimiter=',')
-# v425_cas = np.loadtxt('Cuneo_2023_data/V425 Cas.csv', delimiter=',')
-# v751_cyg = np.loadtxt('Cuneo_2023_data/V751 Cyg.csv', delimiter=',')
+# bz_cam = np.loadtxt('Cuneo_2023_figure_data/BZ Cam.csv', delimiter=',') 
+# mv_lyr = np.loadtxt('Cuneo_2023_figure_data/MV Lyr.csv', delimiter=',')
+# v425_cas = np.loadtxt('Cuneo_2023_figure_data/V425 Cas.csv', delimiter=',')
+# v751_cyg = np.loadtxt('Cuneo_2023_figure_data/V751 Cyg.csv', delimiter=',')
 
 # Animation for the EW excess plots showing the data for particular runs and 
 # the fit to data to produce than run's EW excess.

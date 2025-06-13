@@ -14,7 +14,9 @@ Emission_Line_Asymmetries/24_55_mask
 old_code
 Emission_Line_Asymmetries/molly_spectra.npy
 Emission_Line_Asymmetries/AWDs_spec/
-Sirocco_cv_grid_masters
 Emission_Line_Asymmetries/*/
 .idea
 .vscode
+plots
+Online_PyScript/ignore_folder
+Line_Luminosities
