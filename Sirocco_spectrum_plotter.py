@@ -270,9 +270,9 @@ for i in range(5):
 # ax[4].plot(wavelengths[run_num], fluxes[run_num][:, -1])
 plt.show()
 
-# %% FIGURE 4+ CV PAPER 4 CUENO SUBPLOTS Originial
+# %% FIGURE 3 CV PAPER 4 CUENO SUBPLOTS Originial
 ################################################################################
-print('FIGURE 4: CV PAPER 4 CUNEO SUBPLOTS')
+print('FIGURE 3: CV PAPER 4 CUNEO SUBPLOTS')
 ################################################################################
 
 index_limits = (0,62) # 0,17
@@ -493,7 +493,7 @@ for axis, sys_name in enumerate(unique_systems):
     #if axis% 2 == 0:
     axins = inset_axes(
         ax,
-        width="40%", height="40%",
+        width="45%", height="45%",
         loc=locs[axis],
         bbox_to_anchor=(0.0,0,1,1),
         bbox_transform=ax.transAxes,
@@ -505,10 +505,11 @@ for axis, sys_name in enumerate(unique_systems):
         axins.tick_params(axis='y', which='major')
     for row in obs_flux:
         axins.plot(wave, row, lw=0.5, color='black', alpha=0.6)
-    axins.set_xticks([])
+    #axins.set_xticks([])
     #axins.set_yticks([1,2,3])
-    axins.set_xlim(6500, 6685)
+    axins.set_xlim(6515, 6590)
     axins.set_ylabel(r'$F/F_{\mathrm{cont}}$', fontsize=16)
+    axins.set_xlabel(r'$\lambda$($\mathring{A}$)', fontsize=16)
     axins.axvline(x=H_alpha, color='black', linestyle='--', alpha=0.5)
     # thin frame for the inset
     for spine in axins.spines.values():
@@ -602,7 +603,7 @@ for axis, run_num in enumerate(run_nums):
         common_wave, mean_spectra,
         lw=1.5, color='black', alpha=0.6, label = 'Mean'
     )
-    axins.legend(loc ='upper right', fontsize=14, frameon=False)
+    axins.legend(loc ='upper left', fontsize=14, frameon=False)
     
     if axis == 2:
         # Build horizontal parameter string
@@ -611,7 +612,7 @@ for axis, run_num in enumerate(run_nums):
             rf'$\dot{{M}}_{{wind}}:{to_latex_sci(parameter_table[run_num, 2])}\enspace\enspace$',
             rf'$d:{parameter_table[run_num, 3]:.2f}\enspace\enspace$',
             rf'$\alpha:{parameter_table[run_num, 4]:.2f}\qquad\qquad\qquad\;$',
-            rf'$l:{to_latex_sci(parameter_table[run_num, 5])}\qquad\quad\;$',
+            rf'$R_s:{to_latex_sci(parameter_table[run_num, 5])}\qquad\,\,$',
             rf'$\beta:{parameter_table[run_num, 6]:.2f}\enspace\enspace$'
         ]
 
@@ -624,7 +625,7 @@ for axis, run_num in enumerate(run_nums):
             rf'$\dot{{M}}_{{wind}}:{to_latex_sci(parameter_table[run_num, 2])}\enspace\enspace$',
             rf'$d:{parameter_table[run_num, 3]:.2f}\enspace\enspace$',
             rf'$\alpha:{parameter_table[run_num, 4]:.2f}\qquad\qquad\qquad\;$',
-            rf'$l:{to_latex_sci(parameter_table[run_num, 5])}\qquad\quad\;\;$',
+            rf'$R_s:{to_latex_sci(parameter_table[run_num, 5])}\qquad\;\,\,$',
             rf'$\beta:{parameter_table[run_num, 6]:.2f}\enspace\enspace$'
         ]
 
@@ -704,9 +705,10 @@ for axis, run_num in enumerate(run_nums):
     # finalize inset styling
     axins.axvline(x=H_alpha, color='black', linestyle='--', alpha=0.5)
     axins.set_ylabel(r'$F/F_{\mathrm{cont}}$', fontsize=16)
-    axins.set_xticks([])
+    axins.set_xlabel(r'$\lambda$($\mathring{A}$)', fontsize=16)
+    #axins.set_xticks([])
     #axins.set_yticks()
-    axins.set_xlim(6500, 6685)
+    axins.set_xlim(6515, 6590)
     axins.set_title('Observations vs Model', fontsize=16, pad=3)
     for spine in axins.spines.values():
         spine.set_linewidth(0.5)

@@ -568,6 +568,9 @@ axs.scatter(0,0, color='black', marker='+')
 x = [-30, -30, 30, 30, -30, 0, 0, 30]
 y = [-30, 30, 30, -30, 0, -30, 30, 0]
 axs.scatter(x, y, color='black', marker='o')
+x_2 = [-35, 35]
+y_2 = [35,-35]
+axs.scatter(x_2, y_2, color='black', marker='o')
 
 axs.set_xlabel('Red Wing EW Excess')
 axs.set_ylabel('Blue Wing EW Excess')
@@ -582,23 +585,47 @@ axs.text(13.5, 17, 'Line Profiles', fontsize=17, ha='center', va='center', rotat
 # axs.plot(np.linspace(-50, 50, 100), np.linspace(-50, 50, 100), color='black', linestyle='--', alpha=0.5)
 
 axs.plot(np.linspace(-50, 50, 100), -np.linspace(-50, 50, 100), color='black', linestyle='--', alpha=0.5)
+axs.text(-33, 36, '1')
+axs.text(2, 31, '2')
+axs.text(33, 29, '3')
+axs.text(32, 1, '4')
+axs.text(32, -29, '5')
+axs.text(37, -34, '6')
+axs.text(2, -29, '7')
+axs.text(-27, -31, '8')
+axs.text(-28, 1, '9')
+axs.text(-28, 31, '10')
 
 axs.set_xlim(-40, 40)
 axs.set_ylim(-40, 40)
 
 # title labels
-labels = ['Enhanced Blue/\nSuppressed Red Wings', 'Suppressed Red Wing', 'Suppressed Wings', 'Enhanced Wings', 'Enhanced Red Wing', 'Suppressed Blue/\nEnhanced Red Wings', 'Enhanced Blue Wing', 'Suppressed Blue Wing' ]
-
+labels = ['10 - Enhanced Blue/\nSuppressed Red Wings', '9 - Suppressed Red Wing', '8 - Suppressed Wings', '3 - Enhanced Wings', '4 - Enhanced Red Wing', '5 - Suppressed Blue/\nEnhanced Red Wings', '2 - Enhanced Blue Wing', '7 - Suppressed Blue Wing' ]
+labels_2 = ['1 - Inverse P-Cygni', '6 - P-Cygni']
 x_values = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5]
+# theory_datasets = [
+#     [0, 0, 0, 0.1, 0.5, 1.15, 0.4, -0.15, 0, 0, 0], # Inverse P-Cygni
+#     [0, 0, 0, 0, 0.25, 1.2, 0, 0, 0, 0, 0], # Increased Red Absorption
+#     [0, 0, 0, 0, 0, 1.25, 0, 0, 0, 0, 0], # Broad Absorption Wings
+#     [0, 0, 0, 0.1, 0.4, 1.15, 0.4, 0.1, 0, 0, 0], # Broad Emission Wings
+#     [0, 0, 0, 0, 0.25, 1.15, 0.5, 0.1, 0, 0, 0], # Increased Red Emission
+#     [0, 0, 0, -0.15, 0.44, 1.15, 0.5, 0.1, 0, 0, 0], # P-Cygni
+#     [0, 0, 0, 0.1, 0.5, 1.15, 0.25, 0, 0, 0, 0], # Increased Blue Emission
+#     [0, 0, 0, 0, 0, 1.2, 0.25, 0, 0, 0, 0], # Increased Blue Absorption
+# ]
 theory_datasets = [
-    [0, 0, 0, 0.1, 0.5, 1.15, 0.4, -0.15, 0, 0, 0], # Inverse P-Cygni
-    [0, 0, 0, 0, 0.25, 1.2, 0, 0, 0, 0, 0], # Increased Red Absorption
-    [0, 0, 0, 0, 0, 1.25, 0, 0, 0, 0, 0], # Broad Absorption Wings
-    [0, 0, 0, 0.1, 0.4, 1.15, 0.4, 0.1, 0, 0, 0], # Broad Emission Wings
-    [0, 0, 0, 0, 0.25, 1.15, 0.5, 0.1, 0, 0, 0], # Increased Red Emission
-    [0, 0, 0, -0.15, 0.44, 1.15, 0.5, 0.1, 0, 0, 0], # P-Cygni
-    [0, 0, 0, 0.1, 0.5, 1.15, 0.25, 0, 0, 0, 0], # Increased Blue Emission
-    [0, 0, 0, 0, 0, 1.2, 0.25, 0, 0, 0, 0], # Increased Blue Absorption
+    [0, 0, 0, 0.1, 0.5, 1.15, 0, 0, 0, 0, 0], # Inverse P-Cygni top left
+    [0, 0, 0, 0, 0.25, 1.2, 0, 0, 0, 0, 0], # Increased Red Absorption middle left
+    [0, 0, 0, 0, 0, 1.25, 0, 0, 0, 0, 0], # Broad Absorption Wings bottom left
+    [0, 0, 0, 0.1, 0.4, 1.15, 0.4, 0.1, 0, 0, 0], # Broad Emission Wings top right
+    [0, 0, 0, 0, 0.25, 1.15, 0.5, 0.1, 0, 0, 0], # Increased Red Emission middle right
+    [0, 0, 0, 0, 0, 1.15, 0.5, 0.1, 0, 0, 0], # P-Cygni bottom right
+    [0, 0, 0, 0.1, 0.5, 1.15, 0.25, 0, 0, 0, 0], # Increased Blue Emission top
+    [0, 0, 0, 0, 0, 1.2, 0.25, 0, 0, 0, 0], # Increased Blue Absorption bottom
+]
+theory_datasets_2 = [
+    [0, 0, 0.02, 0.2, 0.6, 1.15, 0, -0.18, 0, 0, 0], # Inverse P_Cygni
+    [0, 0, 0, -0.18, 0, 1.15, 0.6, 0.2, 0.02, 0, 0] # P-cygni
 ]
 
 x_values_detailed = np.linspace(-5, 5, 100)
@@ -607,20 +634,41 @@ for i in range(8):
     array = np.interp(x_values_detailed, x_values, theory_datasets[i])
     theory_datasets_detailed.append(gaussian_filter1d(array, 2.5))
 
+theory_datasets_detailed_2 = []
+for i in range(2):
+    array = np.interp(x_values_detailed, x_values, theory_datasets_2[i])
+    theory_datasets_detailed_2.append(gaussian_filter1d(array, 2.5))
+
 plt.xticks(visible=False)
 plt.yticks(visible=False)
 
 # Define positions for the mini graphs
 positions = [
-    (-85, 22),
-    (-85, -18.5),
-    (-85, -60),
-    (47, 22),
-    (47, -18.5),
-    (47, -60),
+    (-85, 1),
+    (-85, -40),
+    (-85, -82),
+    (47, 43),
+    (47, 1),
+    (47, -40),
     (-17.5, 43),
-    (-17.5, -85)
+    (-17.5, -82)
 ]
+# positions = [
+#     (-85, 22),
+#     (-85, -18.5),
+#     (-85, -60),
+#     (47, 22),
+#     (47, -18.5),
+#     (47, -60),
+#     (-17.5, 43),
+#     (-17.5, -85)
+# ]
+
+positions_2 = [
+    (-85, 43),
+    (47, -82)
+]
+
 
 # Plot temporary Gaussian in mini graphs
 i = 0
@@ -643,8 +691,73 @@ for x_pos, y_pos in positions:
         labelbottom=False,    # Hide x-axis tick labels
         labelleft=False       # Hide y-axis tick labels
     )
-    ax_inset.set_title(labels[i], fontdict={'fontsize': 14})
-    ax_inset.set_ylim(-0.3, 1.2)
+    if i in [0,5]:
+        ax_inset.set_title(
+            labels[i],
+            fontsize=14,
+            loc='center',
+            y=0.77,
+            bbox=dict(
+                boxstyle='round,pad=0.15',
+                facecolor='whitesmoke',
+                edgecolor='lightgrey',
+                alpha=1
+            )
+        )
+    else: 
+        ax_inset.set_title(
+            labels[i],
+            fontsize=14,
+            loc='center',
+            y=0.85,
+            bbox=dict(
+                boxstyle='round,pad=0.15',
+                facecolor='whitesmoke',
+                edgecolor='lightgrey',
+                alpha=1
+            )
+        )
+    ax_inset.set_ylim(-0.2, 1.38)
+    #ax_inset.text(-4.5,1.0, f'{i+1}', fontsize=14, color='black', fontweight='bold')
+    i += 1
+
+
+i = 0
+for x_pos, y_pos in positions_2:
+    # Create an inset axis at each position
+    ax_inset = axs.inset_axes([x_pos, y_pos, 35, 35],
+                              transform=axs.transData)
+    # Generate data for Gaussian plot
+    x = np.linspace(-5, 5, 100)
+    y = np.exp(-x**2)
+    # Plot Gaussian in inset axes
+    ax_inset.plot(x, y, color='red', linestyle='--')
+    ax_inset.plot(x_values_detailed, theory_datasets_detailed_2[i], color='black')
+    # Plot vertical zero‐line in blue
+    ax_inset.axvline(x=0, color='black', linestyle='--', alpha=0.5)
+    # Change inset spines and ticks to blue
+    for spine in ax_inset.spines.values():
+        spine.set_color('black')
+    ax_inset.tick_params(
+        axis='both',
+        which='both',
+        labelbottom=False,
+        labelleft=False,
+        colors='black'
+    )
+    ax_inset.set_title(
+        labels_2[i],
+        fontsize=14,
+        loc='center',
+        y=0.85,
+        bbox=dict(
+            boxstyle='round,pad=0.15',
+            facecolor='whitesmoke',
+            edgecolor='lightgrey',
+            alpha=1
+        )
+    )
+    ax_inset.set_ylim(-0.2, 1.38)
     i += 1
 
 # Create custom legend
@@ -652,7 +765,7 @@ custom_lines = [Line2D([0], [0], color='red', linestyle='--'),
                 Line2D([0], [0], color='black'),
                 Line2D([0], [0], color='black', linestyle='--', alpha=0.5)]
 
-fig.legend(custom_lines, ['Fixed Gaussian', 'Hypothetical Line Profile', 'Rest Wavelength'], loc='upper center', ncol=1, bbox_to_anchor=(-0.1, -0.13))
+fig.legend(custom_lines, ['Fixed Gaussian', 'Hypothetical Line Profile', 'Rest Wavelength'], loc='upper center', ncol=3, bbox_to_anchor=(0.5, -0.29))
 plt.savefig('plots/Figure_theory_diag_diagram', dpi=dpi)
 plt.show()
 
@@ -660,13 +773,13 @@ plt.show()
 ################################################################################
 print('FIGURE 2: MASK FITTING METHODOLOGY')
 ################################################################################
-
+# NOTE: Run FWHM CALCULATIONS FIRST
 H_alpha = 6562.819
 blue_peak_mask = (22, 55)  # number of angstroms to cut around the peak, blue minus.
 red_peak_mask = (22, 55)  # number of angstroms to cut around the peak, red plus.
 
 final_results = all_results[11]  # 45° inclination
-run =701
+run = 701
 
 fig, ax = plt.subplots(1, 1, figsize=(7, 7), sharey=True)
 ax.plot(final_results['wavelength_grid'][run],
@@ -684,7 +797,7 @@ ax.plot(final_results['wavelength_grid'][run],
             label='Fitted Continuum',
             color='blue'
             )
-ax.axvline(x=H_alpha, color='black', linestyle='--', alpha=0.5, label=r'$H\alpha$')
+ax.axvline(x=H_alpha, color='black', linestyle='-.', alpha=0.5, label=r'$H\alpha$')
 ax.set_xlabel('Wavelength ($\mathring{A}$)')
 ax.set_ylabel(r'Flux (erg s$^{-1}$ cm$^{-2}$ $\mathring{A}^{-1}$)')
 
@@ -694,6 +807,35 @@ ax.axvspan(H_alpha - blue_peak_mask[1], H_alpha - blue_peak_mask[0], color='blue
 ax.axvline(x=H_alpha + red_peak_mask[0], color='red', linestyle='--', alpha=0.5)
 ax.axvline(x=H_alpha + red_peak_mask[1], color='red', linestyle='--', alpha=0.5)
 ax.axvspan(H_alpha + red_peak_mask[0], H_alpha + red_peak_mask[1], color='red', alpha=0.1, label='Red Window')
+fwhmover2 = fwhm_results[11]['fwhm'][run]/2
+ewover2 = ew_results[11]['ew'][run]/2
+# continuum level at Hα
+Fc = np.interp(H_alpha,
+               final_results['wavelength_grid'][run],
+               final_results['fit_con'][run])
+
+# current axis limits
+y_min, y_max = ax.get_ylim()
+
+# draw EW rectangle only up to the continuum height
+ax.axvspan(H_alpha - ewover2, H_alpha + ewover2,
+           ymin=(0 - y_min)/(y_max - y_min),
+           ymax=(Fc - y_min)/(y_max - y_min),
+           color='grey', alpha=0.3, label='EW', zorder=-1)
+#add grey boundary lines
+ax.axvline(x=H_alpha - ewover2, ymax=(Fc - y_min)/(y_max - y_min), color='grey', linestyle='--', alpha=0.7, lw=1)
+ax.axvline(x=H_alpha + ewover2, ymax=(Fc - y_min)/(y_max - y_min), color='grey', linestyle='--', alpha=0.7, lw=1)
+y_EW = Fc * 0.75   # a touch above the continuum so it’s visible
+ax.annotate('', xy=(H_alpha + ewover2, y_EW),
+                 xytext=(H_alpha - ewover2, y_EW),
+                 arrowprops=dict(arrowstyle='<->', color='grey', lw=2))
+
+ax.axvspan(H_alpha - fwhmover2, H_alpha + fwhmover2, ymin=(0 - y_min)/(y_max - y_min), color='orange', alpha=0.3, label='FWHM')
+ax.axvline(x=H_alpha - fwhmover2, color='orange', linestyle='--', alpha=0.8, lw=1)
+ax.axvline(x=H_alpha + fwhmover2, color='orange', linestyle='--', alpha=0.8, lw=1)
+# ax.annotate('', xy=(H_alpha + fwhmover2+1, 1e-12),
+#                  xytext=(H_alpha - fwhmover2-1, 1e-12),
+#                  arrowprops=dict(arrowstyle='<->', color='orange', lw=1, shrinkA=0, shrinkB=0))
 
 # Get the y-position for the annotations
 y_min, y_max = ax.get_ylim()
@@ -722,7 +864,7 @@ handles, labels = ax.get_legend_handles_labels()
 fig.subplots_adjust(wspace=0, top=0.85)
 
 # Add global legend
-fig.legend(handles, labels, loc='upper center', ncol=len(labels)/3, bbox_to_anchor=(0.48, 1.03))
+fig.legend(handles, labels, loc='upper center', ncol=len(labels)/3, bbox_to_anchor=(0.48, 1.1))
 # add white space on the right side of the plot
 plt.subplots_adjust(right=0.83)
 plt.savefig('plots/Figure_mask_fit_method', dpi=dpi)
