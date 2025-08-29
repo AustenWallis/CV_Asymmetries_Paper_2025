@@ -1,39 +1,13 @@
 # CV Asymmetries Paper 2025
 [![DOI](https://zenodo.org/badge/767447082.svg)](https://doi.org/10.5281/zenodo.15257396)
 
+PYSCRIPT WEB BASED INTERACTIVE TOOL TO SEE SPECTRA: https://austenwallis.pyscriptapps.com/h-alpha-grid-inspector/latest/
+
 This is a open research store for my CV asymmetries paper 2025 {link to be added}. 
 The Emission_Line_Asymmetries.py script is not designed to be run straight as a python file. I operate the script like a juypter notebook by using vscode, Ipykernal and magic commands (# %%). This is why the python script is sectioned. The user should run the script-notebook in a similar format. This code isn't indented for production, only for paper reproducibility.  
 
-ChatGPT summary of the paper below (o1 model):
-🌌 Main Objective:
-
-To evaluate how well asymmetric line profile diagnostic plots detect outflows and identify line characteristics in cataclysmic variable (CV) systems using 729 wind-only simulated spectra from the Sirocco radiative transfer code.
-
-⸻
-
-🔑 Key Findings:
-	•	P-Cygni profiles are classic outflow indicators, but not all outflows exhibit them.
-	•	Asymmetric diagnostic plots, which assess deviations from Gaussian profiles in spectral lines (mainly Hα), have limited reliability in isolation.
-	•	Masking window choice (velocity range around the line core) significantly affects results; a fixed window causes sensitivity and inconsistencies.
-	•	A more robust method is to scale the masking region with the line’s full-width half maximum (FWHM), improving the diagnostic’s consistency.
-	•	Inclination angle plays a big role — higher inclinations lead to double-peaked profiles and larger equivalent width excesses.
-	•	Developed a linear regressor to predict emission measure and equivalent width based on physical parameters of the system — useful for observers.
-
-⸻
-
-📉 Implications:
-
-The study shows that outflow detection via line asymmetries needs to be used alongside other diagnostics, especially due to the high sensitivity to user input (e.g., masking range). Simulations like those from Sirocco are critical for interpreting observational data more robustly.
-
-⸻
-
-📝 Longer Description
-
-This paper investigates how asymmetric emission-line profiles can serve as indicators of outflows in cataclysmic variables (CVs), where a white dwarf accretes material from a disk. The authors note that while classic P-Cygni signatures are strong evidence for winds, many CVs produce subtler features that are harder to classify. By focusing on line asymmetries—especially in Hα—they aim to refine existing diagnostic plots and reduce dependence on user-chosen velocity masking windows that can skew results.
-
-To do this, they generate 729 purely wind-based spectra using Sirocco, a Monte Carlo radiative transfer code configured for CV outflows. Physical parameters such as disk mass accretion rate, wind geometry, and acceleration laws are varied systematically to explore how different setups shape emission lines. The team then applies “asymmetric diagnostic plots,” adapting the masking window to the full-width half maximum of each line so that outflow signatures, rather than arbitrary velocity bounds, drive the measurement of asymmetries.
-
-Their findings show that wind-driven emission alone can populate nearly any part of the diagnostic plot, confirming that no single quadrant automatically implies a strong outflow. However, the revised, adaptive approach makes asymmetry signals clearer, particularly for lower-inclination systems with single-peaked lines. The authors conclude that comparing observed spectra to these advanced simulations—and employing new tools like linear regressors to link physical parameters and emission strengths—offers the most reliable way to decode how disk winds shape CV emission lines.
+### Abstract
+Blueshifted absorption is the classic spectroscopic signature of an accretion disc wind in X-ray binaries and cataclysmic variables (CVs). However, outflows can also create pure emission lines, especially at optical wavelengths. Therefore, developing other outflow diagnostics for these types of lines is worthwhile. With this in mind, we construct a systematic grid of 3645 synthetic wind-formed $\mathrm{H\alpha}$ line profiles for CVs with the radiative transfer code `sirocco`. Our grid yields a variety of line shapes: symmetric, asymmetric, single‐ to quadruple‐peaked, and even P-Cygni profiles. About 20 per cent of these lines -- our 'Gold' sample -- have strengths and widths consistent with observations. We use this grid to test a recently proposed method for identifying wind-formed emission lines based on deviations in the wing profile shape: the 'excess equivalent width diagnostic diagram'. We find that our Gold sample can preferentially populate the suggested 'wind regions' of this diagram. However, the method is highly sensitive to the adopted definition of the line profile 'wing'. Hence, we propose a refined definition based on the full-width at half maximum to improve the interpretability of the diagnostic diagram. Furthermore, we define an approximate scaling relation for the strengths of wind-formed CV emission lines in terms of the outflow parameters. This relation provides a fast way to assess whether -- and what kind of -- outflow can produce an observed emission line. All our wind-based models are open-source and we provide an easy-to-use web-based tool to browse our full set of $\mathrm{H\alpha}$ spectral profiles.
 
 ### The repository currently includes:
 - Asymmetries_code_normalised.py/unnormalised.py
@@ -47,13 +21,14 @@ Their findings show that wind-driven emission alone can populate nearly any part
 - Rebinning_Spec_Tot_vs_Spec_Spectra:
     - A script to rebin the ionisation cycles spectra vs the spectral cycles spectra for PYTHON. This was due to a discrepancy
         identified by Ed on ~Jan 24. Shown to have no (or negligible) effects on the grids I am using.
+- Figure_4_Panel_D_Emissivities:
+  	- A script to find the emissivities, velocitis, and other model parameters such as electron density etc. Helpful in diagnosing more interesting spectra. 
 
 ### Sirocco Model Access:
-- 729 spectra files can be found under the 'Release_Ha_grid_spec_files' folder. Sirocco (formally Python) v87f was used. Bare in mind if generating your own data, Sirocco uses Monte Carlo processes, therefore your results may vary verys slightly. A python script (dynamic_grid.py) is available in this repository to generate the .pf files required to run matching sirocco models. The template pf files used to generate the models is under 'Template_pf_files'.
+- 729 spectra files can be found under the `H_alpha_models` folder. Sirocco (formally Python) v87f was used. Bare in mind if generating your own data, Sirocco uses Monte Carlo processes, therefore your results may vary verys slightly. A python script (dynamic_grid.py) is available in this repository to generate the .pf files required to run matching sirocco models. The template pf files used to generate the models is under 'Template_pf_files'.
 
-
-https://github.com/user-attachments/assets/59b1e52d-baee-4638-be8b-06536274acb6
-
+### All Plotting Data:
+- This can be found in `COPY_OF_ALL_PAPER_DATA` folder. Contains information such as sirocco model parameters, EWs, FWHMs Exceeses, wavelength and flux (normalised and unnormalised) data, line luminosities, sample labels, 
 
 ### Cueno Data Access: 
 Although we do have this data, this should be requested from the original authors. 
